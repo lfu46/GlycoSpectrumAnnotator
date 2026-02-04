@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "glycospectrum-annotator"
-version = "0.1.0"
-description = "MS/MS spectrum annotation tool for glycopeptides with EThcD support and false match rate calculation"
+name = "spectrum-annotator-ddzby"
+version = "0.2.0"
+description = "Universal MS/MS spectrum annotation tool for glycopeptides and crosslinked peptides"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -19,9 +19,14 @@ keywords = [
     "proteomics",
     "glycoproteomics",
     "glycopeptide",
+    "crosslinking",
+    "XL-MS",
     "spectrum-annotation",
     "EThcD",
     "O-GlcNAc",
+    "N-glycan",
+    "DSSO",
+    "DSBSO",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -51,6 +56,10 @@ dev = [
     "black>=23.0.0",
     "flake8>=6.0.0",
 ]
+streamlit = [
+    "streamlit>=1.28.0",
+    "plotly>=5.18.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/lfu46/GlycoSpectrumAnnotator"
@@ -59,11 +68,11 @@ Repository = "https://github.com/lfu46/GlycoSpectrumAnnotator"
 Issues = "https://github.com/lfu46/GlycoSpectrumAnnotator/issues"
 
 [project.scripts]
-glycospectrum = "glycospectrum.cli:main"
+spectrum-annotator = "spectrum_annotator_ddzby.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["glycospectrum*"]
+include = ["spectrum_annotator_ddzby*"]
 
 [tool.black]
 line-length = 100

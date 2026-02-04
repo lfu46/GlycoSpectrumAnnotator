@@ -9,7 +9,7 @@ import pytest
 import sys
 sys.path.insert(0, '..')
 
-from glycospectrum import (
+from spectrum_annotator_ddzby import (
     MONOSACCHARIDE_MASSES,
     OXONIUM_IONS_EXTENDED,
     OXONIUM_IONS_O_GLCNAC,

@@ -1,18 +1,19 @@
 """
-GlycoSpectrumAnnotator - MS/MS Spectrum Annotation for Glycopeptides
+Spectrum Annotator Ddzby - Universal MS/MS Spectrum Annotation
 
-A Python package for annotating mass spectrometry spectra of glycopeptides,
-with support for EThcD fragmentation, Y ion series, oxonium ions, and
-false match rate calculation.
+A Python package for annotating mass spectrometry spectra of glycopeptides
+and crosslinked peptides, with support for multiple fragmentation methods.
 
 Supports:
-- O-GlcNAc / O-GalNAc (simple O-glycans)
+- O-glycans (Core 1-4, sialylated, phosphorylated, sulfated)
 - N-glycans (high-mannose, complex, hybrid)
-- Extended Y ion series for complex glycans
-- Comprehensive oxonium ion library
+- Crosslinked peptides (DSSO, DSBSO, BS3)
+- EThcD, HCD, CID fragmentation
+- Y ion series and oxonium ions
+- False match rate calculation
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Longping Fu"
 
 from .fragment_calculator import (

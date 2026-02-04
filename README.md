@@ -1,81 +1,122 @@
-# GlycoSpectrumAnnotator
+# Spectrum Annotator Ddzby
 
-A Python tool for annotating MS/MS spectra of glycopeptides, optimized for EThcD fragmentation with false match rate (FMR) calculation.
+Universal MS/MS spectrum annotation tool for glycopeptides and crosslinked peptides.
+
+[![PyPI version](https://badge.fury.io/py/spectrum-annotator-ddzby.svg)](https://badge.fury.io/py/spectrum-annotator-ddzby)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
-- **Glycopeptide-focused**: Optimized for O-GlcNAc and O-GalNAc modifications
-- **EThcD support**: Full c/z ion series for glycan localization
-- **Y ion annotation**: Intact glycopeptide and glycan loss ions (Y0/Y1)
-- **Oxonium ions**: Diagnostic glycan fragment ions
-- **False Match Rate**: Quality assessment using spectrum shifting method (Schulte et al., Anal. Chem. 2025)
-- **Publication-ready**: IPSA-style colored PDF output
-- **Batch processing**: Annotate multiple spectra with statistics export
+### Glycopeptide Annotation
+- **O-glycans**: Core 1-4 structures, sialylated, phosphorylated, sulfated variants
+- **N-glycans**: High-mannose, complex, hybrid structures
+- **Y ion series**: Complete glycan ladder (Y0, Y1, Y2, ..., Y(core), Y(intact))
+- **Oxonium ions**: Comprehensive diagnostic ion library
+
+### Crosslinked Peptide Annotation
+- **MS-cleavable**: DSSO, DSBSO with stub mass identification
+- **Non-cleavable**: BS3, DSS
+- **ProForma notation**: Full support for crosslink annotation
+
+### Quality Assessment
+- **False Match Rate**: Spectrum shifting method (Schulte et al., Anal. Chem. 2025)
+- **Annotation statistics**: Coverage, matched peaks, intensity
 
 ## Installation
 
+### From PyPI (Recommended)
+
 ```bash
-# Clone the repository
+pip install spectrum-annotator-ddzby
+```
+
+### From Source
+
+```bash
 git clone https://github.com/lfu46/GlycoSpectrumAnnotator.git
 cd GlycoSpectrumAnnotator
-
-# Install in development mode
 pip install -e .
+```
 
-# Or install dependencies only
-pip install -r requirements.txt
+### With Streamlit Web App
+
+```bash
+pip install spectrum-annotator-ddzby[streamlit]
 ```
 
 ## Quick Start
 
-### Single Spectrum Annotation
+### Python API
 
 ```python
-from glycospectrum import SpectrumAnnotator, parse_modifications_from_string
-import pandas as pd
+from spectrum_annotator_ddzby import (
+    FragmentCalculator,
+    SpectrumAnnotator,
+    O_GLYCAN_COMPOSITIONS,
+    N_GLYCAN_COMPOSITIONS,
+    CROSSLINKERS,
+    generate_crosslink_fragments,
+)
 
-# Load your spectrum data
-spectrum = pd.read_csv("spectrum.csv")
-exp_mz = spectrum['mz'].values
-exp_intensity = spectrum['intensity'].values
-
-# Define peptide and modifications
-peptide = "AGYSQGATQYTQAQQTR"
-modifications = parse_modifications_from_string("N-term(229.1629),4S(528.2859)")
-
-# Create annotator
-annotator = SpectrumAnnotator(
-    peptide=peptide,
-    modifications=modifications,
+# Glycopeptide annotation
+calc = FragmentCalculator(
+    peptide="PEPTIDEK",
+    modifications={"5": "HexNAc"},
     precursor_charge=3,
-    precursor_mz=789.1234,
-    exp_mz=exp_mz,
-    exp_intensity=exp_intensity,
-    tolerance_ppm=20.0,
-    gene="GENE1",
-    site_index="GENE1_S4"
+    glycan_type="O-GlcNAc"
 )
+fragments = calc.calculate_all_fragments()
 
-# Generate annotated spectrum
-fig = annotator.plot(output_path="annotated_spectrum.pdf")
+# Access glycan library
+print(O_GLYCAN_COMPOSITIONS['Sialyl-T'].mass)  # 656.2276 Da
+
+# Crosslinked peptide fragments
+xl_fragments = generate_crosslink_fragments(
+    peptide1_mass=1000.0,
+    peptide2_mass=1200.0,
+    crosslinker=CROSSLINKERS['DSBSO'],
+    precursor_charge=4
+)
 ```
 
-### Batch Annotation
+### Web Interface (Streamlit)
 
-```python
-from glycospectrum import annotate_spectra_batch
-
-output_files, stats_df = annotate_spectra_batch(
-    summary_file="spectra_summary.csv",
-    spectra_dir="spectra/",
-    output_dir="annotated/",
-    tolerance_ppm=20.0,
-    save_statistics=True
-)
-
-# View statistics
-print(stats_df[['site_index', 'sequence_coverage', 'fmr_peaks']])
+```bash
+# Run the web app
+streamlit run app.py
 ```
+
+Or visit the hosted version at: [Coming Soon]
+
+## Supported Glycan Compositions
+
+### O-Glycans (12 common human structures)
+| Name | Composition | Mass (Da) |
+|------|-------------|-----------|
+| Tn (O-GlcNAc) | HexNAc(1) | 203.08 |
+| T-antigen | HexNAc(1)Hex(1) | 365.13 |
+| Sialyl-Tn | HexNAc(1)NeuAc(1) | 494.17 |
+| Sialyl-T | HexNAc(1)Hex(1)NeuAc(1) | 656.23 |
+| Core 2 | HexNAc(2)Hex(1) | 568.21 |
+| ... | ... | ... |
+
+### N-Glycans
+| Name | Composition | Mass (Da) |
+|------|-------------|-----------|
+| Man5 | HexNAc(2)Hex(5) | 1216.42 |
+| Man9 | HexNAc(2)Hex(9) | 1864.63 |
+| A2G2F | HexNAc(4)Hex(5)Fuc(1) | 1768.64 |
+| A2G2FS2 | HexNAc(4)Hex(5)Fuc(1)NeuAc(2) | 2350.83 |
+
+## Supported Crosslinkers
+
+| Name | Type | Spacer | Stub Masses |
+|------|------|--------|-------------|
+| DSSO | MS-cleavable | 10.1 Å | A: 54.01, T: 85.98, S: 103.99 |
+| DSBSO | MS-cleavable | 12.5 Å | A: 54.01, T: 85.98, S: 103.99 |
+| BS3 | Non-cleavable | 11.4 Å | - |
+| DSS | Non-cleavable | 11.4 Å | - |
 
 ## Ion Types and Colors
 
@@ -85,13 +126,11 @@ print(stats_df[['site_index', 'sequence_coverage', 'fmr_peaks']])
 | y | Red | C-terminal HCD ions |
 | c | Green | N-terminal ETD ions |
 | z | Orange | C-terminal ETD ions |
-| Y0 | Purple | Peptide with glycan loss |
-| Y1 | Gray-purple | Intact glycopeptide |
+| Y | Purple | Glycopeptide Y ions |
 | Oxonium | Brown | Glycan diagnostic ions |
+| XL-stub | Cyan | Crosslinker stubs |
 
 ## Output Statistics
-
-The annotator provides comprehensive statistics:
 
 - **Sequence Coverage**: Fraction of peptide bonds with fragment ions
 - **FMR (peaks)**: False match rate based on peak count
@@ -99,34 +138,17 @@ The annotator provides comprehensive statistics:
 - **Peaks Annotated**: Fraction of experimental peaks matched
 - **Intensity Annotated**: Fraction of total intensity matched
 
-## Supported Modifications
-
-Default modifications include:
-- TMT6plex (229.1629 Da)
-- HexNAc / O-GlcNAc (203.0794 Da)
-- HexNAc + TMT (528.2859 Da)
-- Carbamidomethyl (57.02146 Da)
-- Oxidation (15.9949 Da)
-
-## File Formats
-
-**Input**: CSV files with columns `mz` and `intensity`
-
-**Output**:
-- PDF annotated spectra (publication-ready)
-- CSV annotation statistics
-
 ## References
 
-- False Match Rate calculation: Schulte et al., Analytical Chemistry (2025)
-- IPSA color scheme: [Interactive Peptide Spectral Annotator](https://github.com/coongroup/IPSA)
+- Schulte, D. et al. "A Universal Spectrum Annotator for Complex Peptidoforms in Mass Spectrometry-Based Proteomics." *Analytical Chemistry* 2025, 97, 23120-23130.
+- MSFragger Human O-glycan database
 
 ## Citation
 
 If you use this tool in your research, please cite:
 
 ```
-Fu, L. (2025). GlycoSpectrumAnnotator: MS/MS spectrum annotation for glycopeptides.
+Fu, L. (2026). Spectrum Annotator Ddzby: Universal MS/MS spectrum annotation tool.
 GitHub: https://github.com/lfu46/GlycoSpectrumAnnotator
 ```
 
