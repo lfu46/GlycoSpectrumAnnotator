@@ -59,6 +59,8 @@ dev = [
 streamlit = [
     "streamlit>=1.28.0",
     "plotly>=5.18.0",
+    "kaleido>=0.2.1",
+    "Pillow>=9.0.0",
 ]
 
 [project.urls]

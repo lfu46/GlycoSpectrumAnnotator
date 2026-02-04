@@ -150,6 +150,7 @@ Or visit the hosted version at: [Coming Soon]
 ## References
 
 - Schulte, D. et al. "A Universal Spectrum Annotator for Complex Peptidoforms in Mass Spectrometry-Based Proteomics." *Analytical Chemistry* 2025, 97, 23120-23130.
+- Brademan, D.R., Riley, N.M., Kwiecien, N.W., and Coon, J.J. "Interactive Peptide Spectral Annotator: A Versatile Web-based Tool for Proteomic Applications." *Molecular & Cellular Proteomics* 2019, 18(8 Suppl 1), S193-S201. [DOI: 10.1074/mcp.TIR118.001209](https://doi.org/10.1074/mcp.TIR118.001209)
 - MSFragger Human O-glycan database
 
 ## Citation
