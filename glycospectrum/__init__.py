@@ -54,6 +54,17 @@ from .glycan_library import (
     identify_glycan_from_mass,
     get_glycan_mass,
     parse_proforma_glycan,
+    # Crosslinker support
+    Crosslinker,
+    CROSSLINKERS,
+    DSSO,
+    DSBSO,
+    BS3,
+    DSS,
+    generate_crosslink_fragments,
+    identify_crosslink_stubs,
+    calculate_crosslink_fmr,
+    parse_proforma_crosslink,
 )
 
 __all__ = [
@@ -64,6 +75,7 @@ __all__ = [
     "MatchedIon",
     "FalseMatchRate",
     "GlycanComposition",
+    "Crosslinker",
     # Functions
     "match_peaks",
     "calculate_false_match_rate",
@@ -75,6 +87,11 @@ __all__ = [
     "identify_glycan_from_mass",
     "get_glycan_mass",
     "parse_proforma_glycan",
+    # Crosslinker functions
+    "generate_crosslink_fragments",
+    "identify_crosslink_stubs",
+    "calculate_crosslink_fmr",
+    "parse_proforma_crosslink",
     # Constants - Masses
     "MONOSACCHARIDE_MASSES",
     "AA_MASSES",
@@ -88,6 +105,12 @@ __all__ = [
     # Constants - Glycan compositions
     "O_GLYCAN_COMPOSITIONS",
     "N_GLYCAN_COMPOSITIONS",
+    # Constants - Crosslinkers
+    "CROSSLINKERS",
+    "DSSO",
+    "DSBSO",
+    "BS3",
+    "DSS",
     # Visualization
     "ION_COLORS",
 ]

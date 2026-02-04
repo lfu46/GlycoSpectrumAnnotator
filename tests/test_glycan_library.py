@@ -21,6 +21,14 @@ from glycospectrum import (
     generate_n_glycan_y_ions,
     identify_glycan_from_mass,
     get_glycan_mass,
+    # Crosslinker support
+    Crosslinker,
+    CROSSLINKERS,
+    DSSO,
+    DSBSO,
+    BS3,
+    generate_crosslink_fragments,
+    identify_crosslink_stubs,
 )
 
 
@@ -152,6 +160,153 @@ class TestGetGlycanMass:
         mass = get_glycan_mass("HexNAc2Hex3")
         expected = 2 * 203.0794 + 3 * 162.0528
         assert abs(mass - expected) < 0.01
+
+
+class TestExpandedOGlycans:
+    """Tests for expanded O-glycan database (MSFragger 12 common structures)."""
+
+    def test_all_12_msfragger_glycans_present(self):
+        """Test that all 12 MSFragger O-glycans are defined."""
+        # MSFragger glycan compositions
+        expected_compositions = [
+            {'HexNAc': 1},  # 1
+            {'HexNAc': 1, 'Hex': 1},  # 2
+            {'HexNAc': 1, 'NeuAc': 1},  # 3
+            {'HexNAc': 2, 'Hex': 1},  # 4
+            {'HexNAc': 1, 'Hex': 1, 'NeuAc': 1},  # 5
+            {'HexNAc': 2, 'Hex': 2},  # 6
+            {'HexNAc': 2, 'Hex': 1, 'NeuAc': 1},  # 7
+            {'HexNAc': 1, 'Hex': 1, 'NeuAc': 2},  # 8
+            {'HexNAc': 2, 'Hex': 2, 'NeuAc': 1},  # 9
+            {'HexNAc': 2, 'Hex': 2, 'Fuc': 1, 'NeuAc': 1},  # 10
+            {'HexNAc': 2, 'Hex': 2, 'NeuAc': 2},  # 11
+            {'HexNAc': 2, 'Hex': 2, 'Fuc': 1, 'NeuAc': 2},  # 12
+        ]
+
+        for expected_comp in expected_compositions:
+            found = False
+            for glycan in O_GLYCAN_COMPOSITIONS.values():
+                if glycan.composition == expected_comp:
+                    found = True
+                    break
+            assert found, f"Missing O-glycan composition: {expected_comp}"
+
+    def test_sialyl_tn_mass(self):
+        """Test Sialyl-Tn (HexNAc1NeuAc1) mass."""
+        glycan = O_GLYCAN_COMPOSITIONS['Sialyl-Tn']
+        expected = MONOSACCHARIDE_MASSES['HexNAc'] + MONOSACCHARIDE_MASSES['NeuAc']
+        assert abs(glycan.mass - expected) < 0.01
+
+    def test_disialyl_t_mass(self):
+        """Test Disialyl-T (HexNAc1Hex1NeuAc2) mass."""
+        glycan = O_GLYCAN_COMPOSITIONS['Disialyl-T']
+        expected = (MONOSACCHARIDE_MASSES['HexNAc'] +
+                   MONOSACCHARIDE_MASSES['Hex'] +
+                   2 * MONOSACCHARIDE_MASSES['NeuAc'])
+        assert abs(glycan.mass - expected) < 0.01
+
+    def test_core_structures_present(self):
+        """Test that Core 1-4 structures are defined."""
+        assert 'Core1' in O_GLYCAN_COMPOSITIONS
+        assert 'Core2' in O_GLYCAN_COMPOSITIONS
+        assert 'Core3' in O_GLYCAN_COMPOSITIONS
+        assert 'Core4' in O_GLYCAN_COMPOSITIONS
+
+    def test_phosphorylated_glycans(self):
+        """Test phosphorylated O-glycan definitions."""
+        assert 'HexNAc1-Phosphate' in O_GLYCAN_COMPOSITIONS
+        glycan = O_GLYCAN_COMPOSITIONS['HexNAc1-Phosphate']
+        assert 'Phosphate' in glycan.composition
+
+    def test_sulfated_glycans(self):
+        """Test sulfated O-glycan definitions."""
+        assert 'HexNAc1-Sulfate' in O_GLYCAN_COMPOSITIONS
+        glycan = O_GLYCAN_COMPOSITIONS['HexNAc1-Sulfate']
+        assert 'Sulfate' in glycan.composition
+
+
+class TestCrosslinkers:
+    """Tests for crosslinker support."""
+
+    def test_crosslinker_definitions(self):
+        """Test that main crosslinkers are defined."""
+        assert 'DSSO' in CROSSLINKERS
+        assert 'DSBSO' in CROSSLINKERS
+        assert 'BS3' in CROSSLINKERS
+
+    def test_dsso_properties(self):
+        """Test DSSO crosslinker properties."""
+        assert DSSO.cleavable == True
+        assert 'alkene' in DSSO.stub_masses
+        assert 'thiol' in DSSO.stub_masses
+        assert abs(DSSO.stub_masses['alkene'] - 54.0106) < 0.001
+
+    def test_dsbso_properties(self):
+        """Test DSBSO crosslinker properties."""
+        assert DSBSO.cleavable == True
+        assert DSBSO.reactive_groups == 'NHS'
+        assert len(DSBSO.stub_masses) > 0
+
+    def test_bs3_non_cleavable(self):
+        """Test BS3 is non-cleavable."""
+        assert BS3.cleavable == False
+        assert len(BS3.stub_masses) == 0
+
+    def test_stub_mass_difference(self):
+        """Test A-T mass difference is ~32 Da (sulfur)."""
+        alkene = DSSO.stub_masses['alkene']
+        thiol = DSSO.stub_masses['thiol']
+        diff = thiol - alkene
+        assert abs(diff - 31.97) < 0.01
+
+
+class TestCrosslinkFragments:
+    """Tests for crosslink fragment generation."""
+
+    def test_generate_dsso_fragments(self):
+        """Test DSSO fragment generation."""
+        pep1_mass = 1000.0
+        pep2_mass = 1200.0
+
+        fragments = generate_crosslink_fragments(
+            pep1_mass, pep2_mass, DSSO, precursor_charge=4
+        )
+
+        assert 'peptide1' in fragments
+        assert 'peptide2' in fragments
+        assert 'α-A' in fragments['peptide1']
+        assert 'β-T' in fragments['peptide2']
+
+    def test_non_cleavable_fragments(self):
+        """Test BS3 (non-cleavable) fragment generation."""
+        pep1_mass = 1000.0
+        pep2_mass = 1200.0
+
+        fragments = generate_crosslink_fragments(
+            pep1_mass, pep2_mass, BS3, precursor_charge=3
+        )
+
+        assert 'precursor' in fragments
+        assert 'intact' in fragments['precursor']
+
+    def test_identify_stubs(self):
+        """Test stub identification from masses."""
+        peptide_mass = 1000.0
+        # Simulate observed masses with alkene and thiol stubs
+        observed = [
+            1000.0 + 54.01,  # Alkene stub
+            1000.0 + 85.98,  # Thiol stub
+            500.0,  # Random peak
+        ]
+
+        matches = identify_crosslink_stubs(
+            observed, peptide_mass, DSSO, tolerance_da=0.05
+        )
+
+        assert len(matches) >= 2
+        stub_names = [m[0] for m in matches]
+        assert 'alkene' in stub_names
+        assert 'thiol' in stub_names
 
 
 if __name__ == "__main__":

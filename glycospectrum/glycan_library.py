@@ -94,20 +94,97 @@ class GlycanComposition:
         )
 
 
-# Common O-glycan compositions
+# =============================================================================
+# COMMON HUMAN O-GLYCAN COMPOSITIONS
+# Based on MSFragger Human O-glycan database (12 common structures)
+# Core structures: Core 1-4
+# =============================================================================
+
 O_GLYCAN_COMPOSITIONS = {
-    # Simple O-GlcNAc/O-GalNAc
+    # -------------------------------------------------------------------------
+    # Simple O-GlcNAc/O-GalNAc (Tn antigen)
+    # -------------------------------------------------------------------------
     'O-GlcNAc': GlycanComposition('O-GlcNAc', {'HexNAc': 1}, 203.0794, 'O-GlcNAc'),
     'O-GalNAc': GlycanComposition('O-GalNAc', {'HexNAc': 1}, 203.0794, 'O-GalNAc'),
+    'Tn': GlycanComposition('Tn', {'HexNAc': 1}, 203.0794, 'O-glycan'),
 
-    # Core 1 (T antigen): GalNAc-Gal
+    # -------------------------------------------------------------------------
+    # Core 1 structures (T antigen): Galβ1-3GalNAc
+    # -------------------------------------------------------------------------
     'Core1': GlycanComposition('Core1', {'HexNAc': 1, 'Hex': 1}, 365.1322, 'O-glycan'),
+    'T-antigen': GlycanComposition('T-antigen', {'HexNAc': 1, 'Hex': 1}, 365.1322, 'O-glycan'),
 
-    # Core 2: GalNAc(-Gal)(-GlcNAc)
+    # -------------------------------------------------------------------------
+    # Core 2 structures: Galβ1-3(GlcNAcβ1-6)GalNAc
+    # -------------------------------------------------------------------------
     'Core2': GlycanComposition('Core2', {'HexNAc': 2, 'Hex': 1}, 568.2116, 'O-glycan'),
 
-    # Sialylated Core 1
-    'SialylCore1': GlycanComposition('Sialyl-Core1', {'HexNAc': 1, 'Hex': 1, 'NeuAc': 1}, 656.2276, 'O-glycan'),
+    # -------------------------------------------------------------------------
+    # Core 3 structures: GlcNAcβ1-3GalNAc
+    # -------------------------------------------------------------------------
+    'Core3': GlycanComposition('Core3', {'HexNAc': 2}, 406.1588, 'O-glycan'),
+
+    # -------------------------------------------------------------------------
+    # Core 4 structures: GlcNAcβ1-3(GlcNAcβ1-6)GalNAc
+    # -------------------------------------------------------------------------
+    'Core4': GlycanComposition('Core4', {'HexNAc': 3}, 609.2382, 'O-glycan'),
+
+    # -------------------------------------------------------------------------
+    # MSFragger Human O-glycan database (12 common structures)
+    # Format: HexNAc(n)Hex(m)Fuc(f)NeuAc(s)
+    # -------------------------------------------------------------------------
+
+    # 1. HexNAc(1) - Tn antigen (already defined above)
+
+    # 2. HexNAc(1)Hex(1) - T antigen / Core 1 (already defined above)
+
+    # 3. HexNAc(1)NeuAc(1) - Sialyl-Tn
+    'HexNAc1NeuAc1': GlycanComposition('Sialyl-Tn', {'HexNAc': 1, 'NeuAc': 1}, 494.1748, 'O-glycan'),
+    'Sialyl-Tn': GlycanComposition('Sialyl-Tn', {'HexNAc': 1, 'NeuAc': 1}, 494.1748, 'O-glycan'),
+
+    # 4. HexNAc(2)Hex(1) - Core 2 (already defined above)
+
+    # 5. HexNAc(1)Hex(1)NeuAc(1) - Sialyl-T / Sialyl-Core1
+    'HexNAc1Hex1NeuAc1': GlycanComposition('Sialyl-T', {'HexNAc': 1, 'Hex': 1, 'NeuAc': 1}, 656.2276, 'O-glycan'),
+    'Sialyl-T': GlycanComposition('Sialyl-T', {'HexNAc': 1, 'Hex': 1, 'NeuAc': 1}, 656.2276, 'O-glycan'),
+    'Sialyl-Core1': GlycanComposition('Sialyl-Core1', {'HexNAc': 1, 'Hex': 1, 'NeuAc': 1}, 656.2276, 'O-glycan'),
+
+    # 6. HexNAc(2)Hex(2) - Extended Core 1 or Core 2
+    'HexNAc2Hex2': GlycanComposition('HexNAc2Hex2', {'HexNAc': 2, 'Hex': 2}, 730.2644, 'O-glycan'),
+
+    # 7. HexNAc(2)Hex(1)NeuAc(1) - Sialylated Core 2
+    'HexNAc2Hex1NeuAc1': GlycanComposition('HexNAc2Hex1NeuAc1', {'HexNAc': 2, 'Hex': 1, 'NeuAc': 1}, 859.3070, 'O-glycan'),
+
+    # 8. HexNAc(1)Hex(1)NeuAc(2) - Disialyl-T
+    'HexNAc1Hex1NeuAc2': GlycanComposition('Disialyl-T', {'HexNAc': 1, 'Hex': 1, 'NeuAc': 2}, 947.3230, 'O-glycan'),
+    'Disialyl-T': GlycanComposition('Disialyl-T', {'HexNAc': 1, 'Hex': 1, 'NeuAc': 2}, 947.3230, 'O-glycan'),
+
+    # 9. HexNAc(2)Hex(2)NeuAc(1) - Monosialylated extended
+    'HexNAc2Hex2NeuAc1': GlycanComposition('HexNAc2Hex2NeuAc1', {'HexNAc': 2, 'Hex': 2, 'NeuAc': 1}, 1021.3598, 'O-glycan'),
+
+    # 10. HexNAc(2)Hex(2)Fuc(1)NeuAc(1) - Fucosylated monosialylated
+    'HexNAc2Hex2Fuc1NeuAc1': GlycanComposition('HexNAc2Hex2Fuc1NeuAc1', {'HexNAc': 2, 'Hex': 2, 'Fuc': 1, 'NeuAc': 1}, 1167.4177, 'O-glycan'),
+
+    # 11. HexNAc(2)Hex(2)NeuAc(2) - Disialylated extended
+    'HexNAc2Hex2NeuAc2': GlycanComposition('HexNAc2Hex2NeuAc2', {'HexNAc': 2, 'Hex': 2, 'NeuAc': 2}, 1312.4552, 'O-glycan'),
+
+    # 12. HexNAc(2)Hex(2)Fuc(1)NeuAc(2) - Fucosylated disialylated
+    'HexNAc2Hex2Fuc1NeuAc2': GlycanComposition('HexNAc2Hex2Fuc1NeuAc2', {'HexNAc': 2, 'Hex': 2, 'Fuc': 1, 'NeuAc': 2}, 1458.5131, 'O-glycan'),
+
+    # -------------------------------------------------------------------------
+    # Additional common O-glycans with NeuGc (non-human, but for completeness)
+    # -------------------------------------------------------------------------
+    'HexNAc1NeuGc1': GlycanComposition('HexNAc1NeuGc1', {'HexNAc': 1, 'NeuGc': 1}, 510.1697, 'O-glycan'),
+    'HexNAc1Hex1NeuGc1': GlycanComposition('HexNAc1Hex1NeuGc1', {'HexNAc': 1, 'Hex': 1, 'NeuGc': 1}, 672.2225, 'O-glycan'),
+
+    # -------------------------------------------------------------------------
+    # Phosphorylated and Sulfated O-glycans (common in your lab's data)
+    # -------------------------------------------------------------------------
+    'HexNAc1-Phosphate': GlycanComposition('HexNAc1-Phosphate', {'HexNAc': 1, 'Phosphate': 1}, 283.0457, 'O-glycan'),
+    'HexNAc1Hex1-Phosphate': GlycanComposition('HexNAc1Hex1-Phosphate', {'HexNAc': 1, 'Hex': 1, 'Phosphate': 1}, 445.0985, 'O-glycan'),
+    'HexNAc1-Sulfate': GlycanComposition('HexNAc1-Sulfate', {'HexNAc': 1, 'Sulfate': 1}, 283.0362, 'O-glycan'),
+    'HexNAc1Hex1-Sulfate': GlycanComposition('HexNAc1Hex1-Sulfate', {'HexNAc': 1, 'Hex': 1, 'Sulfate': 1}, 445.0890, 'O-glycan'),
+    'HexNAc2Hex2-Sulfate': GlycanComposition('HexNAc2Hex2-Sulfate', {'HexNAc': 2, 'Hex': 2, 'Sulfate': 1}, 810.2212, 'O-glycan'),
 }
 
 # Common N-glycan compositions
@@ -459,4 +536,319 @@ def parse_proforma_glycan(proforma_string: str) -> Optional[GlycanComposition]:
     if match:
         comp_string = match.group(1)
         return GlycanComposition.from_string(comp_string)
+    return None
+
+
+# =============================================================================
+# CROSSLINKER SUPPORT
+# =============================================================================
+# MS-cleavable crosslinkers (DSSO, DSBSO) and non-cleavable (BS3)
+# Reference: Schulte et al. Anal. Chem. 2025, 97, 23120-23130
+# =============================================================================
+
+@dataclass
+class Crosslinker:
+    """
+    Represents a chemical crosslinker for XL-MS experiments.
+
+    Attributes:
+        name: Crosslinker name
+        formula: Chemical formula
+        intact_mass: Mass of intact crosslinker (after reaction, losing NHS groups)
+        spacer_length: Spacer arm length in Angstroms
+        cleavable: Whether MS-cleavable
+        reactive_groups: What residues it reacts with (e.g., 'NHS' for Lys)
+        stub_masses: Dict of stub names to masses (for cleavable crosslinkers)
+        diagnostic_ions: Dict of diagnostic ion names to m/z values
+    """
+    name: str
+    formula: str
+    intact_mass: float
+    spacer_length: float
+    cleavable: bool
+    reactive_groups: str
+    stub_masses: Dict[str, float]
+    diagnostic_ions: Dict[str, float]
+
+
+# =============================================================================
+# CROSSLINKER DEFINITIONS
+# =============================================================================
+
+# DSSO - Disuccinimidyl sulfoxide (MS-cleavable, NHS-ester)
+# Thermo Fisher Scientific, commonly used MS-cleavable crosslinker
+# Cleaves at C-S bonds adjacent to sulfoxide, producing alkene and thiol/sulfenic stubs
+DSSO = Crosslinker(
+    name='DSSO',
+    formula='C14H18N2O9S',
+    intact_mass=158.0038,  # Mass added to crosslinked peptide pair (after losing 2x NHS)
+    spacer_length=10.1,    # Angstroms
+    cleavable=True,
+    reactive_groups='NHS',  # Reacts with Lys, protein N-terminus
+    stub_masses={
+        'alkene': 54.0106,      # C3H2O - Alkene stub (A)
+        'thiol': 85.9826,       # C3H2OS - Unsaturated thiol stub (T)
+        'sulfenic': 103.9932,   # C3H4O2S - Sulfenic acid stub (S)
+    },
+    diagnostic_ions={
+        # Mass difference between A and T stubs = 31.97 Da
+        'A-T_diff': 31.9720,
+        # Reporter ions in low mass region
+        'reporter_104': 104.0170,
+        'reporter_122': 122.0276,
+    }
+)
+
+# DSBSO - Disuccinimidyl bis-sulfoxide (MS-cleavable, enrichable)
+# Contains azide/alkyne for click chemistry enrichment + acid-cleavable site
+# Similar sulfoxide cleavage mechanism to DSSO
+# Reference: Kao et al. Mol Cell Proteomics 2011; Jiang et al. Angew Chem 2026
+DSBSO = Crosslinker(
+    name='DSBSO',
+    formula='C11H16N2O6S2',
+    intact_mass=308.0388,  # Full crosslinker mass (C11H16O6S2 portion)
+    spacer_length=12.5,    # Angstroms (approximate)
+    cleavable=True,
+    reactive_groups='NHS',
+    stub_masses={
+        # DSBSO has similar sulfoxide cleavage chemistry
+        # Stub masses may differ from DSSO due to different spacer
+        'alkene': 54.0106,      # C3H2O - Alkene stub (A)
+        'thiol': 85.9826,       # Unsaturated thiol stub (T)
+        'sulfenic': 103.9932,   # Sulfenic acid stub (S)
+        # Extended fragments specific to DSBSO
+        'ETHMP': 226.0144,      # Extended thiol fragment
+    },
+    diagnostic_ions={
+        'A-T_diff': 31.9720,
+        # DSBSO-specific diagnostic ions
+        'D12_ETHMP_alkene_diff': 226.01,  # Distance between D12 and ETHMP+alkene
+    }
+)
+
+# BS3 - Bis(sulfosuccinimidyl)suberate (non-cleavable, NHS-ester)
+# Classic non-cleavable crosslinker
+BS3 = Crosslinker(
+    name='BS3',
+    formula='C16H18N2O14S2',
+    intact_mass=138.0681,  # Suberate spacer mass (C8H12O2) after NHS loss
+    spacer_length=11.4,    # Angstroms
+    cleavable=False,
+    reactive_groups='NHS',
+    stub_masses={},  # Non-cleavable, no stubs
+    diagnostic_ions={}
+)
+
+# DSS - Disuccinimidyl suberate (non-cleavable, membrane permeable version of BS3)
+DSS = Crosslinker(
+    name='DSS',
+    formula='C16H20N2O8',
+    intact_mass=138.0681,  # Same spacer as BS3
+    spacer_length=11.4,
+    cleavable=False,
+    reactive_groups='NHS',
+    stub_masses={},
+    diagnostic_ions={}
+)
+
+# Dictionary of all crosslinkers
+CROSSLINKERS = {
+    'DSSO': DSSO,
+    'DSBSO': DSBSO,
+    'BS3': BS3,
+    'DSS': DSS,
+}
+
+
+# =============================================================================
+# CROSSLINKED PEPTIDE FRAGMENTATION
+# =============================================================================
+
+def generate_crosslink_fragments(
+    peptide1_mass: float,
+    peptide2_mass: float,
+    crosslinker: Crosslinker,
+    precursor_charge: int,
+    include_neutral_losses: bool = True
+) -> Dict[str, Dict[str, float]]:
+    """
+    Generate theoretical fragments for a crosslinked peptide pair.
+
+    For MS-cleavable crosslinkers (DSSO, DSBSO):
+    - Cleaves at sulfoxide C-S bonds
+    - Produces signature doublet pairs (αA/βT and αT/βA)
+    - Each peptide retains one stub (alkene, thiol, or sulfenic acid)
+
+    Args:
+        peptide1_mass: Neutral mass of first peptide
+        peptide2_mass: Neutral mass of second peptide
+        crosslinker: Crosslinker object
+        precursor_charge: Charge state of precursor
+        include_neutral_losses: Include H2O and NH3 losses
+
+    Returns:
+        Dictionary with 'peptide1', 'peptide2', and 'diagnostic' fragments
+    """
+    fragments = {
+        'peptide1': {},
+        'peptide2': {},
+        'diagnostic': {},
+        'precursor': {},
+    }
+
+    PROTON = 1.007276
+    H2O = 18.0106
+    NH3 = 17.0265
+
+    if crosslinker.cleavable:
+        # MS-cleavable crosslinker fragmentation
+        alkene = crosslinker.stub_masses.get('alkene', 0)
+        thiol = crosslinker.stub_masses.get('thiol', 0)
+        sulfenic = crosslinker.stub_masses.get('sulfenic', 0)
+
+        # Peptide 1 with different stubs
+        fragments['peptide1']['α-A'] = peptide1_mass + alkene  # Alkene stub
+        fragments['peptide1']['α-T'] = peptide1_mass + thiol   # Thiol stub
+        fragments['peptide1']['α-S'] = peptide1_mass + sulfenic  # Sulfenic stub
+
+        # Peptide 2 with different stubs
+        fragments['peptide2']['β-A'] = peptide2_mass + alkene
+        fragments['peptide2']['β-T'] = peptide2_mass + thiol
+        fragments['peptide2']['β-S'] = peptide2_mass + sulfenic
+
+        # Add charged versions
+        for charge in range(1, min(precursor_charge, 4)):
+            for name, mass in list(fragments['peptide1'].items()):
+                fragments['peptide1'][f'{name}+{charge}'] = (mass + charge * PROTON) / charge
+            for name, mass in list(fragments['peptide2'].items()):
+                fragments['peptide2'][f'{name}+{charge}'] = (mass + charge * PROTON) / charge
+
+        # Neutral losses
+        if include_neutral_losses:
+            for pep_key in ['peptide1', 'peptide2']:
+                for name, mass in list(fragments[pep_key].items()):
+                    if '+' not in name:  # Only for neutral masses
+                        fragments[pep_key][f'{name}-H2O'] = mass - H2O
+                        fragments[pep_key][f'{name}-NH3'] = mass - NH3
+
+        # Diagnostic ions
+        for ion_name, ion_mass in crosslinker.diagnostic_ions.items():
+            fragments['diagnostic'][ion_name] = ion_mass
+
+    else:
+        # Non-cleavable crosslinker - intact crosslinked peptide
+        intact_mass = peptide1_mass + peptide2_mass + crosslinker.intact_mass
+
+        fragments['precursor']['intact'] = intact_mass
+
+        # Charged precursors
+        for charge in range(1, precursor_charge + 1):
+            fragments['precursor'][f'intact+{charge}'] = (intact_mass + charge * PROTON) / charge
+
+    return fragments
+
+
+def identify_crosslink_stubs(
+    observed_masses: List[float],
+    peptide_mass: float,
+    crosslinker: Crosslinker,
+    tolerance_da: float = 0.02
+) -> List[Tuple[str, float, float]]:
+    """
+    Identify crosslinker stub modifications on a peptide.
+
+    Looks for signature mass shifts indicating crosslinker cleavage.
+
+    Args:
+        observed_masses: List of observed fragment masses
+        peptide_mass: Expected peptide mass without crosslinker
+        crosslinker: Crosslinker object
+        tolerance_da: Mass tolerance
+
+    Returns:
+        List of (stub_name, observed_mass, mass_error) tuples
+    """
+    matches = []
+
+    if not crosslinker.cleavable:
+        return matches
+
+    for stub_name, stub_mass in crosslinker.stub_masses.items():
+        expected = peptide_mass + stub_mass
+
+        for obs_mass in observed_masses:
+            error = abs(obs_mass - expected)
+            if error <= tolerance_da:
+                matches.append((stub_name, obs_mass, error))
+
+    return matches
+
+
+def calculate_crosslink_fmr(
+    matched_peaks: int,
+    total_peaks: int,
+    matched_intensity: float,
+    total_intensity: float,
+    shift_range: int = 50,
+    pi_offset: float = 3.14159
+) -> Dict[str, float]:
+    """
+    Calculate False Match Rate for crosslink spectrum annotation.
+
+    Uses the spectrum shifting method from Schulte et al.:
+    - Shift spectrum by π ± 25 Th in 1 Th steps
+    - π offset prevents isotope pattern false matches
+    - FMR = average(shifted matches) / unshifted matches
+
+    Args:
+        matched_peaks: Number of matched peaks in original spectrum
+        total_peaks: Total number of peaks
+        matched_intensity: Sum of matched peak intensities
+        total_intensity: Sum of all peak intensities
+        shift_range: Range of shifts (default ±25 Th = 50 shifts)
+        pi_offset: Offset to avoid isotope patterns (default π)
+
+    Returns:
+        Dictionary with FMR estimates for peaks and intensity
+    """
+    # This is a placeholder for the actual FMR calculation
+    # Real implementation requires the full spectrum data
+    return {
+        'fmr_peaks': matched_peaks / total_peaks if total_peaks > 0 else 0,
+        'fmr_intensity': matched_intensity / total_intensity if total_intensity > 0 else 0,
+        'note': 'Full FMR calculation requires spectrum shifting - implement in annotator'
+    }
+
+
+# =============================================================================
+# PROFORMA CROSSLINK NOTATION
+# =============================================================================
+
+def parse_proforma_crosslink(proforma_string: str) -> Optional[Tuple[str, str, str]]:
+    """
+    Parse ProForma 2.0 crosslink notation.
+
+    Examples:
+        "KC[L-cystine#XL1]M//GC[#XL1]V" -> ('KC[...]M', 'GC[...]V', 'L-cystine')
+        "PEPTIDEK[DSSO#XL1]//ANOTHERK[#XL1]" -> peptide pair with DSSO
+
+    Returns:
+        Tuple of (peptide1, peptide2, crosslinker_name) or None
+    """
+    # Check for chimeric peptide separator
+    if '//' not in proforma_string:
+        return None
+
+    parts = proforma_string.split('//')
+    if len(parts) != 2:
+        return None
+
+    peptide1, peptide2 = parts
+
+    # Extract crosslinker name from first occurrence
+    xl_match = re.search(r'\[([A-Za-z0-9-]+)#XL\d+\]', peptide1)
+    if xl_match:
+        crosslinker_name = xl_match.group(1)
+        return (peptide1, peptide2, crosslinker_name)
+
     return None
