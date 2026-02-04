@@ -46,10 +46,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state for theme
-if 'dark_mode' not in st.session_state:
-    st.session_state.dark_mode = False
-
 # IPSA-inspired color scheme
 IPSA_COLORS = {
     'header_bg': '#3c4b64',
@@ -64,275 +60,130 @@ IPSA_COLORS = {
     'unassigned': '#a6a6a6',
 }
 
-# Custom CSS based on theme
-def get_custom_css(dark_mode):
-    # Common styles
-    common_css = """
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-        .author-logo {
-            text-decoration: none;
-        }
-        .author-logo:hover {
-            opacity: 0.85;
-        }
-        .author-name {
-            font-family: 'Inter', sans-serif;
-            font-weight: 600;
-            font-size: 1.1rem;
-            background: linear-gradient(135deg, #A51C30 0%, #C9102F 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .sub-header {
-            font-size: 1.25rem;
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-
-        /* Larger tab font */
-        .stTabs [data-baseweb="tab"] {
-            font-size: 1.05rem !important;
-        }
-
-        /* Sidebar styling - compact with larger font */
-        div[data-testid="stSidebar"] .stMarkdown p {
-            font-size: 1rem !important;
-            margin-bottom: 0.3rem !important;
-        }
-        div[data-testid="stSidebar"] .stMarkdown h1,
-        div[data-testid="stSidebar"] .stMarkdown h2,
-        div[data-testid="stSidebar"] .stMarkdown h3 {
-            font-size: 1.1rem !important;
-            margin-top: 0.8rem !important;
-            margin-bottom: 0.4rem !important;
-        }
-        div[data-testid="stSidebar"] label {
-            font-size: 0.95rem !important;
-        }
-        div[data-testid="stSidebar"] .stRadio > div {
-            gap: 0.5rem !important;
-        }
-        div[data-testid="stSidebar"] .stCheckbox {
-            padding: 0.1rem 0 !important;
-        }
-        div[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
-            padding-top: 0.2rem !important;
-            padding-bottom: 0.2rem !important;
-        }
-    """
-
-    if dark_mode:
-        return f"""
+# CSS with font adjustments (no color overrides - let Streamlit handle theme)
+def get_custom_css():
+    return """
         <style>
-            {common_css}
-            .header-container {{
+            /* Header styling */
+            .header-container {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                background: linear-gradient(90deg, #3c4b64 0%, #2c3b54 100%);
                 padding: 0.8rem 1.5rem;
-                margin: -1rem -1rem 1rem -1rem;
-                border-radius: 0 0 10px 10px;
-            }}
-            .main-title {{
+                margin-bottom: 1rem;
+            }
+            .main-title {
                 font-size: 1.8rem;
                 font-weight: bold;
-                color: white;
-                margin: 0;
-            }}
-            .author-name {{
-                font-family: 'Inter', sans-serif;
+            }
+            .author-name {
+                color: #A51C30;
                 font-weight: 600;
-                font-size: 0.95rem;
-                color: white;
-                line-height: 1.2;
-            }}
-            .sub-header {{
-                color: #aaa;
-            }}
-            .stTabs [data-baseweb="tab-list"] {{
-                gap: 2rem;
-                background-color: #2c3b54;
-                padding: 0.5rem;
-                border-radius: 5px;
-            }}
-            .stTabs [data-baseweb="tab"] {{
-                color: white;
-            }}
-            div[data-testid="stSidebar"] {{
-                background-color: #2c3b54;
-            }}
-            div[data-testid="stSidebar"] .stMarkdown,
-            div[data-testid="stSidebar"] label,
-            div[data-testid="stSidebar"] .stSelectbox label,
-            div[data-testid="stSidebar"] .stSlider label {{
-                color: white !important;
-            }}
-            .stApp {{
-                background-color: #1a1a2e;
-            }}
-            .stApp > header {{
-                background-color: transparent;
-            }}
-            /* Dark mode text colors */
-            .stApp, .stApp p, .stApp span, .stApp label, .stApp div {{
-                color: #e0e0e0;
-            }}
-            .stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {{
-                color: #e0e0e0 !important;
-            }}
-            .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label {{
-                color: #e0e0e0 !important;
-            }}
-            .stMetric label, .stMetric [data-testid="stMetricValue"] {{
-                color: #e0e0e0 !important;
-            }}
-            .stDataFrame {{
-                color: #e0e0e0;
-            }}
-        </style>
-        """
-    else:
-        return f"""
-        <style>
-            {common_css}
-            .header-container {{
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #f8f9fa;
-                padding: 0.8rem 1.5rem;
-                margin: -1rem -1rem 1rem -1rem;
-                border-bottom: 1px solid #e0e0e0;
-            }}
-            .main-title {{
-                font-size: 1.8rem;
-                font-weight: bold;
-                color: #2c3e50;
-                margin: 0;
-            }}
-            .sub-header {{
-                color: #555;
-            }}
+            }
+            .sub-header {
+                font-size: 24px !important;
+                text-align: center;
+                margin-bottom: 1.5rem;
+            }
 
-            /* Main app background */
-            .stApp {{
-                background-color: #ffffff;
-            }}
-
-            /* Tabs */
-            .stTabs [data-baseweb="tab-list"] {{
-                gap: 1.5rem;
-                background-color: #f0f2f6;
-                padding: 0.5rem;
-                border-radius: 5px;
-            }}
-            .stTabs [data-baseweb="tab"] {{
-                color: #1a1a1a !important;
-            }}
-
-            /* Force all main content text to be dark */
-            .main .block-container,
-            .main .block-container p,
-            .main .block-container span,
-            .main .block-container label,
-            .main .block-container div,
-            .main .stMarkdown,
-            .main .stMarkdown p,
-            .main .stMarkdown h1,
-            .main .stMarkdown h2,
-            .main .stMarkdown h3,
-            .main .stMarkdown h4,
-            .main [data-testid="stMarkdownContainer"],
-            .main [data-testid="stMarkdownContainer"] p,
-            [data-testid="stAppViewBlockContainer"] p,
-            [data-testid="stAppViewBlockContainer"] span,
-            [data-testid="stAppViewBlockContainer"] label,
-            [data-testid="stVerticalBlock"] p,
-            [data-testid="stVerticalBlock"] label,
-            [data-testid="stVerticalBlock"] span {{
-                color: #1a1a1a !important;
-            }}
-
-            /* All labels dark */
+            /* Main content - larger font size (20px) */
+            .main .block-container {
+                font-size: 20px !important;
+            }
             .main label,
-            .main .stTextInput label,
-            .main .stNumberInput label,
-            .main .stSelectbox label,
+            .main [data-testid="stWidgetLabel"],
+            .main [data-testid="stWidgetLabel"] p,
             .main .stRadio label,
             .main .stCheckbox label,
-            .main .stTextArea label,
-            .stTextInput label,
-            .stNumberInput label,
-            .stSelectbox label,
-            .stRadio label,
-            .stCheckbox label {{
-                color: #1a1a1a !important;
-            }}
+            .main .stSelectbox label,
+            .main .stTextInput label,
+            .main .stNumberInput label,
+            .main .stTextArea label {
+                font-size: 20px !important;
+            }
+            .main p,
+            .main span,
+            .main .stMarkdown p {
+                font-size: 20px !important;
+            }
+            .main h2 {
+                font-size: 28px !important;
+            }
+            .main h3 {
+                font-size: 24px !important;
+            }
+            /* Input fields */
+            .main input,
+            .main textarea,
+            .main [data-baseweb="select"] {
+                font-size: 20px !important;
+            }
+            /* Radio and checkbox text */
+            .main .stRadio > div > label > div,
+            .main .stCheckbox > label > div {
+                font-size: 20px !important;
+            }
+            /* Info box text */
+            .main .stAlert p {
+                font-size: 20px !important;
+            }
 
-            /* Subheaders */
-            .main [data-testid="stSubheader"],
-            .main h1, .main h2, .main h3, .main h4 {{
-                color: #1a1a1a !important;
-            }}
+            /* Larger tab font */
+            .stTabs [data-baseweb="tab"] {
+                font-size: 20px !important;
+                padding: 0.6rem 1rem !important;
+            }
+            .stTabs [data-baseweb="tab"] * {
+                font-size: 20px !important;
+            }
 
-            /* Input fields - light backgrounds with dark text */
-            .stTextInput > div > div > input,
-            .stNumberInput > div > div > input,
-            .stTextArea > div > div > textarea {{
-                background-color: #ffffff !important;
-                color: #1a1a1a !important;
-                border: 1px solid #ced4da !important;
-            }}
-            .stSelectbox > div > div {{
-                background-color: #ffffff !important;
-                border: 1px solid #ced4da !important;
-            }}
-            .stSelectbox > div > div > div,
-            .stSelectbox [data-baseweb="select"] span {{
-                color: #1a1a1a !important;
-            }}
+            /* Sidebar - font size (18px, 2pt smaller than main) */
+            section[data-testid="stSidebar"] {
+                font-size: 18px !important;
+            }
+            section[data-testid="stSidebar"] * {
+                font-size: 18px !important;
+            }
+            section[data-testid="stSidebar"] h1,
+            section[data-testid="stSidebar"] h2,
+            section[data-testid="stSidebar"] h3 {
+                font-size: 22px !important;
+            }
 
-            /* Radio buttons text */
-            .stRadio > div > label,
-            .stRadio [data-baseweb="radio"] + div {{
-                color: #1a1a1a !important;
-            }}
+            /* Compact sidebar spacing */
+            section[data-testid="stSidebar"] .stMarkdown p {
+                margin-bottom: 0.1rem !important;
+                margin-top: 0 !important;
+            }
+            section[data-testid="stSidebar"] .stRadio > div {
+                gap: 0.2rem !important;
+            }
+            section[data-testid="stSidebar"] .stSlider {
+                padding: 0 !important;
+                margin-bottom: 0.1rem !important;
+            }
+            section[data-testid="stSidebar"] hr {
+                margin: 0.3rem 0 !important;
+            }
 
-            /* Metrics */
-            .stMetric label,
-            .stMetric [data-testid="stMetricValue"],
-            .stMetric [data-testid="stMetricLabel"] {{
-                color: #1a1a1a !important;
-            }}
-
-            /* Info boxes */
-            .stAlert {{
-                background-color: #e7f3ff;
-                color: #1a1a1a !important;
-            }}
-            .stAlert p {{
-                color: #1a1a1a !important;
-            }}
-
-            /* Data editor */
-            [data-testid="stDataFrame"] {{
-                background-color: #ffffff;
-            }}
-            [data-testid="stDataFrame"] * {{
-                color: #1a1a1a !important;
-            }}
-
-            /* Column headers */
-            [data-testid="column"] > div > div > div {{
-                color: #1a1a1a !important;
-            }}
+            /* Color picker - smaller size */
+            section[data-testid="stSidebar"] .stColorPicker > div {
+                max-width: 60px !important;
+            }
+            section[data-testid="stSidebar"] .stColorPicker [data-testid="stColorBlock"],
+            section[data-testid="stSidebar"] [data-testid="stColorBlock"] {
+                width: 28px !important;
+                height: 28px !important;
+                min-width: 28px !important;
+                min-height: 28px !important;
+                max-width: 28px !important;
+                max-height: 28px !important;
+                border-radius: 4px !important;
+            }
         </style>
         """
 
-st.markdown(get_custom_css(st.session_state.dark_mode), unsafe_allow_html=True)
+st.markdown(get_custom_css(), unsafe_allow_html=True)
 
 # Header with logo (IPSA-style layout with author branding)
 # Website URL - update when your personal website is live
@@ -351,22 +202,6 @@ st.markdown('<p class="sub-header">Universal MS/MS Spectrum Annotation for Glyco
 # Sidebar
 with st.sidebar:
     st.header("Settings")
-
-    # Theme toggle (IPSA-inspired)
-    st.subheader("Appearance")
-    col_theme1, col_theme2 = st.columns(2)
-    with col_theme1:
-        if st.button("Light", use_container_width=True,
-                     type="secondary" if st.session_state.dark_mode else "primary"):
-            st.session_state.dark_mode = False
-            st.rerun()
-    with col_theme2:
-        if st.button("Dark", use_container_width=True,
-                     type="primary" if st.session_state.dark_mode else "secondary"):
-            st.session_state.dark_mode = True
-            st.rerun()
-
-    st.divider()
 
     analysis_type = st.selectbox(
         "Analysis Type",
@@ -491,47 +326,58 @@ with tab1:
         precursor_charge = st.number_input("Charge State", min_value=1, max_value=10, value=3)
         precursor_mz = st.number_input("Precursor m/z (optional)", min_value=0.0, value=0.0)
 
-        # Spectrum input (IPSA-style table)
+        # Spectrum input - text area for better visibility
         st.subheader("Enter Spectral Data Here")
+        st.markdown("Enter m/z and intensity pairs (one per line, tab or comma separated):")
 
-        # Initialize default spectrum data
-        if 'spectrum_df' not in st.session_state:
-            st.session_state.spectrum_df = pd.DataFrame({
-                'Mass To Charge': [204.087, 366.140, 500.25, 650.30, 800.40, None, None, None, None, None],
-                'Intensity': [1000.0, 800.0, 500.0, 300.0, 200.0, None, None, None, None, None]
-            })
+        # Default example data
+        default_spectrum = """204.087\t1000.0
+366.140\t800.0
+500.25\t500.0
+650.30\t300.0
+800.40\t200.0"""
 
-        # Editable data table (IPSA-style)
-        edited_df = st.data_editor(
-            st.session_state.spectrum_df,
-            num_rows="dynamic",
-            use_container_width=True,
+        if 'spectrum_text' not in st.session_state:
+            st.session_state.spectrum_text = default_spectrum
+
+        spectrum_input = st.text_area(
+            "Spectrum Data (m/z, intensity)",
+            value=st.session_state.spectrum_text,
             height=200,
-            column_config={
-                "Mass To Charge": st.column_config.NumberColumn(
-                    "Mass To Charge",
-                    help="m/z value",
-                    format="%.4f",
-                    min_value=0.0,
-                ),
-                "Intensity": st.column_config.NumberColumn(
-                    "Intensity",
-                    help="Peak intensity",
-                    format="%.1f",
-                    min_value=0.0,
-                ),
-            },
-            hide_index=True,
+            help="Format: m/z<tab>intensity or m/z,intensity (one peak per line)",
+            label_visibility="collapsed"
         )
 
-        # Clear table button
+        # Parse the text input into a dataframe for processing
+        def parse_spectrum_text(text):
+            peaks = []
+            for line in text.strip().split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                # Try tab separator first, then comma
+                if '\t' in line:
+                    parts = line.split('\t')
+                elif ',' in line:
+                    parts = line.split(',')
+                else:
+                    parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        mz = float(parts[0].strip())
+                        intensity = float(parts[1].strip())
+                        peaks.append({'Mass To Charge': mz, 'Intensity': intensity})
+                    except ValueError:
+                        continue
+            return pd.DataFrame(peaks) if peaks else pd.DataFrame({'Mass To Charge': [], 'Intensity': []})
+
+        edited_df = parse_spectrum_text(spectrum_input)
+
+        # Clear button
         col_clear, col_space = st.columns([1, 3])
         with col_clear:
-            if st.button("Clear table", type="secondary"):
-                st.session_state.spectrum_df = pd.DataFrame({
-                    'Mass To Charge': [None] * 10,
-                    'Intensity': [None] * 10
-                })
+            if st.button("Clear", type="secondary"):
+                st.session_state.spectrum_text = ""
                 st.rerun()
 
     with col2:
@@ -559,19 +405,12 @@ with tab1:
                 matched_errors = []
                 matched_mz = []
 
-                # Determine plot colors based on theme
-                if st.session_state.dark_mode:
-                    plot_bg = '#1e1e1e'
-                    paper_bg = '#1e1e1e'
-                    grid_color = '#444'
-                    text_color = 'white'
-                    peak_color = unassigned_color
-                else:
-                    plot_bg = 'white'
-                    paper_bg = 'white'
-                    grid_color = '#e0e0e0'
-                    text_color = 'black'
-                    peak_color = unassigned_color
+                # Plot colors (light theme)
+                plot_bg = 'white'
+                paper_bg = 'white'
+                grid_color = '#e0e0e0'
+                text_color = 'black'
+                peak_color = unassigned_color
 
                 # Create subplot with main spectrum and error plot (IPSA-style)
                 fig = make_subplots(
@@ -681,16 +520,24 @@ with tab1:
                 fig.update_xaxes(
                     title_text="m/z",
                     gridcolor=grid_color,
+                    linecolor=grid_color,
                     row=2, col=1
+                )
+                fig.update_xaxes(
+                    gridcolor=grid_color,
+                    linecolor=grid_color,
+                    row=1, col=1
                 )
                 fig.update_yaxes(
                     title_text="Relative Abundance (%)",
                     gridcolor=grid_color,
+                    linecolor=grid_color,
                     row=1, col=1
                 )
                 fig.update_yaxes(
                     title_text="Error (ppm)",
                     gridcolor=grid_color,
+                    linecolor=grid_color,
                     range=[-tolerance * 1.5, tolerance * 1.5],
                     row=2, col=1
                 )

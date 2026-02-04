@@ -4,11 +4,8 @@ pandas>=1.3.0
 matplotlib>=3.4.0
 pyteomics>=4.5.0
 
-# Optional: for reading various MS file formats
-# lxml>=4.9.0  # Required by pyteomics for mzML
-
-# Development dependencies (install with: pip install -r requirements-dev.txt)
-# pytest>=7.0.0
-# pytest-cov>=4.0.0
-# black>=23.0.0
-# flake8>=6.0.0
+# Web app dependencies
+streamlit>=1.28.0
+plotly>=5.18.0
+kaleido>=0.2.1
+Pillow>=10.0.0
