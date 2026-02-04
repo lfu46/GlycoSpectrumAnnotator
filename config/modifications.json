@@ -1,0 +1,71 @@
+{
+  "fixed_modifications": {
+    "TMT6plex": {
+      "mass": 229.1629,
+      "residues": ["K", "N-term"],
+      "description": "TMT 6-plex isobaric tag"
+    },
+    "Carbamidomethyl": {
+      "mass": 57.02146,
+      "residues": ["C"],
+      "description": "Iodoacetamide alkylation"
+    }
+  },
+  "variable_modifications": {
+    "HexNAc": {
+      "mass": 203.0794,
+      "residues": ["S", "T"],
+      "description": "O-GlcNAc or O-GalNAc"
+    },
+    "HexNAc_TMT": {
+      "mass": 528.2859,
+      "residues": ["S", "T"],
+      "description": "O-GlcNAc/GalNAc with TMT oxonium"
+    },
+    "HexNAc_Metabolic": {
+      "mass": 299.123,
+      "residues": ["S", "T"],
+      "description": "Metabolically labeled O-GlcNAc"
+    },
+    "Oxidation": {
+      "mass": 15.9949,
+      "residues": ["M"],
+      "description": "Methionine oxidation"
+    },
+    "Phospho": {
+      "mass": 79.9663,
+      "residues": ["S", "T", "Y"],
+      "description": "Phosphorylation"
+    }
+  },
+  "glycan_oxonium_ions": {
+    "HexNAc_TMT": {
+      "mass": 529.2937,
+      "description": "HexNAc + TMT oxonium"
+    },
+    "HexNAc+": {
+      "mass": 300.1308,
+      "description": "HexNAc + H2O + H"
+    },
+    "HexNAc": {
+      "mass": 204.0864,
+      "description": "HexNAc oxonium"
+    },
+    "HexNAc-H2O": {
+      "mass": 186.0760,
+      "description": "HexNAc - H2O"
+    },
+    "HexNAc-2H2O": {
+      "mass": 168.0652,
+      "description": "HexNAc - 2H2O"
+    },
+    "HexNAc_frag1": {
+      "mass": 144.0652,
+      "description": "HexNAc fragment"
+    },
+    "HexNAc_frag2": {
+      "mass": 138.0546,
+      "description": "HexNAc fragment"
+    }
+  }
+}

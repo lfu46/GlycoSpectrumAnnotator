@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glycospectrum-annotator"
+version = "0.1.0"
+description = "MS/MS spectrum annotation tool for glycopeptides with EThcD support and false match rate calculation"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Longping Fu", email = "lpfu46@gatech.edu"}
+]
+maintainers = [
+    {name = "Longping Fu", email = "lpfu46@gatech.edu"}
+]
+keywords = [
+    "mass-spectrometry",
+    "proteomics",
+    "glycoproteomics",
+    "glycopeptide",
+    "spectrum-annotation",
+    "EThcD",
+    "O-GlcNAc",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.21.0",
+    "pandas>=1.3.0",
+    "matplotlib>=3.4.0",
+    "pyteomics>=4.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lfu46/GlycoSpectrumAnnotator"
+Documentation = "https://github.com/lfu46/GlycoSpectrumAnnotator#readme"
+Repository = "https://github.com/lfu46/GlycoSpectrumAnnotator"
+Issues = "https://github.com/lfu46/GlycoSpectrumAnnotator/issues"
+
+[project.scripts]
+glycospectrum = "glycospectrum.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["glycospectrum*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

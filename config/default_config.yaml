@@ -1,0 +1,63 @@
+# GlycoSpectrumAnnotator Configuration
+# Copy this file and modify for your lab-specific settings
+
+# Mass tolerance settings
+tolerance:
+  fragment_ppm: 20.0      # Fragment ion matching tolerance
+  precursor_ppm: 10.0     # Precursor matching tolerance
+
+# TMT labeling configuration
+tmt:
+  enabled: true
+  reagent: "TMT6plex"
+  mass: 229.1629
+
+# Fragmentation settings
+fragmentation:
+  primary_method: "EThcD"
+  ion_types:
+    - "c"    # ETD N-terminal
+    - "z"    # ETD C-terminal
+    - "b"    # HCD N-terminal (supplemental)
+    - "y"    # HCD C-terminal (supplemental)
+  max_fragment_charge: 2
+  include_neutral_losses: true
+  neutral_loss_types:
+    - "H2O"
+    - "NH3"
+    - "HexNAc_TMT"
+    - "HexNAc"
+
+# Glycan settings
+glycan:
+  default_type: "O-GlcNAc"
+  include_oxonium_ions: true
+  include_y_ions: true
+  y_ion_series: "simple"    # "simple" (Y0/Y1) or "full" (complete ladder)
+
+# False Match Rate calculation
+fmr:
+  enabled: true
+  shift_range: 25.0         # Th
+  shift_step: 1.0           # Th
+  method: "spectrum_shift"  # Schulte et al. method
+
+# Output settings
+output:
+  format: "pdf"
+  dpi: 300
+  color_scheme: "IPSA"
+  show_error_plot: true
+  max_labels: 50
+  intensity_threshold_pct: 1.0
+
+# Visualization colors (IPSA-style)
+colors:
+  b_ion: "#0d75bc"        # Blue
+  y_ion: "#be202d"        # Red
+  c_ion: "#07a14a"        # Green
+  z_ion: "#f79420"        # Orange
+  Y0_ion: "#9B59B6"       # Purple
+  Y1_ion: "#8491B4"       # Gray-purple
+  oxonium: "#7E6148"      # Brown
+  unassigned: "#a6a6a6"   # Gray
