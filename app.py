@@ -542,7 +542,7 @@ with tab1:
                     row=2, col=1
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
                 # Export options
                 st.markdown("**Export Options**")
@@ -677,7 +677,7 @@ with tab2:
             })
 
         df_o = pd.DataFrame(o_glycan_data)
-        st.dataframe(df_o, use_container_width=True, hide_index=True)
+        st.dataframe(df_o, width="stretch", hide_index=True)
 
     with glycan_tab2:
         st.markdown("### Common N-Glycans")
@@ -693,7 +693,7 @@ with tab2:
             })
 
         df_n = pd.DataFrame(n_glycan_data)
-        st.dataframe(df_n, use_container_width=True, hide_index=True)
+        st.dataframe(df_n, width="stretch", hide_index=True)
 
     # Glycan mass calculator
     st.subheader("Glycan Mass Calculator")
@@ -744,7 +744,7 @@ with tab3:
         })
 
     df_xl = pd.DataFrame(xl_data)
-    st.dataframe(df_xl, use_container_width=True, hide_index=True)
+    st.dataframe(df_xl, width="stretch", hide_index=True)
 
     # Stub mass details
     st.subheader("MS-Cleavable Crosslinker Stub Masses")
@@ -753,7 +753,7 @@ with tab3:
         if xl.cleavable and xl.stub_masses:
             st.markdown(f"#### {name}")
             stub_data = [{"Stub": k, "Mass (Da)": f"{v:.4f}"} for k, v in xl.stub_masses.items()]
-            st.dataframe(pd.DataFrame(stub_data), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(stub_data), width="stretch", hide_index=True)
 
 with tab4:
     st.subheader("About Spectrum Annotator Ddzby")
