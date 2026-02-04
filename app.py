@@ -233,56 +233,101 @@ def get_custom_css(dark_mode):
                 color: #1a1a1a !important;
             }}
 
-            /* Main content area - dark text */
-            section[data-testid="stMainBlockContainer"] .stMarkdown,
-            section[data-testid="stMainBlockContainer"] .stMarkdown p,
-            section[data-testid="stMainBlockContainer"] .stMarkdown h1,
-            section[data-testid="stMainBlockContainer"] .stMarkdown h2,
-            section[data-testid="stMainBlockContainer"] .stMarkdown h3,
-            section[data-testid="stMainBlockContainer"] .stMarkdown h4,
-            section[data-testid="stMainBlockContainer"] label,
-            section[data-testid="stMainBlockContainer"] .stTextInput label,
-            section[data-testid="stMainBlockContainer"] .stNumberInput label,
-            section[data-testid="stMainBlockContainer"] .stSelectbox label {{
+            /* Force all main content text to be dark */
+            .main .block-container,
+            .main .block-container p,
+            .main .block-container span,
+            .main .block-container label,
+            .main .block-container div,
+            .main .stMarkdown,
+            .main .stMarkdown p,
+            .main .stMarkdown h1,
+            .main .stMarkdown h2,
+            .main .stMarkdown h3,
+            .main .stMarkdown h4,
+            .main [data-testid="stMarkdownContainer"],
+            .main [data-testid="stMarkdownContainer"] p,
+            [data-testid="stAppViewBlockContainer"] p,
+            [data-testid="stAppViewBlockContainer"] span,
+            [data-testid="stAppViewBlockContainer"] label,
+            [data-testid="stVerticalBlock"] p,
+            [data-testid="stVerticalBlock"] label,
+            [data-testid="stVerticalBlock"] span {{
                 color: #1a1a1a !important;
             }}
 
-            /* Input fields in main area - light backgrounds */
-            section[data-testid="stMainBlockContainer"] .stTextInput > div > div > input,
-            section[data-testid="stMainBlockContainer"] .stNumberInput > div > div > input {{
+            /* All labels dark */
+            .main label,
+            .main .stTextInput label,
+            .main .stNumberInput label,
+            .main .stSelectbox label,
+            .main .stRadio label,
+            .main .stCheckbox label,
+            .main .stTextArea label,
+            .stTextInput label,
+            .stNumberInput label,
+            .stSelectbox label,
+            .stRadio label,
+            .stCheckbox label {{
+                color: #1a1a1a !important;
+            }}
+
+            /* Subheaders */
+            .main [data-testid="stSubheader"],
+            .main h1, .main h2, .main h3, .main h4 {{
+                color: #1a1a1a !important;
+            }}
+
+            /* Input fields - light backgrounds with dark text */
+            .stTextInput > div > div > input,
+            .stNumberInput > div > div > input,
+            .stTextArea > div > div > textarea {{
                 background-color: #ffffff !important;
                 color: #1a1a1a !important;
                 border: 1px solid #ced4da !important;
             }}
-            section[data-testid="stMainBlockContainer"] .stSelectbox > div > div {{
+            .stSelectbox > div > div {{
                 background-color: #ffffff !important;
                 border: 1px solid #ced4da !important;
             }}
-            section[data-testid="stMainBlockContainer"] .stSelectbox > div > div > div {{
+            .stSelectbox > div > div > div,
+            .stSelectbox [data-baseweb="select"] span {{
+                color: #1a1a1a !important;
+            }}
+
+            /* Radio buttons text */
+            .stRadio > div > label,
+            .stRadio [data-baseweb="radio"] + div {{
                 color: #1a1a1a !important;
             }}
 
             /* Metrics */
-            section[data-testid="stMainBlockContainer"] .stMetric label,
-            section[data-testid="stMainBlockContainer"] .stMetric [data-testid="stMetricValue"] {{
-                color: #1a1a1a !important;
-            }}
-
-            /* Radio and checkbox in main area */
-            section[data-testid="stMainBlockContainer"] .stRadio label,
-            section[data-testid="stMainBlockContainer"] .stCheckbox label {{
+            .stMetric label,
+            .stMetric [data-testid="stMetricValue"],
+            .stMetric [data-testid="stMetricLabel"] {{
                 color: #1a1a1a !important;
             }}
 
             /* Info boxes */
             .stAlert {{
                 background-color: #e7f3ff;
-                color: #1a1a1a;
+                color: #1a1a1a !important;
+            }}
+            .stAlert p {{
+                color: #1a1a1a !important;
             }}
 
             /* Data editor */
             [data-testid="stDataFrame"] {{
                 background-color: #ffffff;
+            }}
+            [data-testid="stDataFrame"] * {{
+                color: #1a1a1a !important;
+            }}
+
+            /* Column headers */
+            [data-testid="column"] > div > div > div {{
+                color: #1a1a1a !important;
             }}
         </style>
         """
