@@ -2,9 +2,12 @@
 
 Universal MS/MS spectrum annotation tool for glycopeptides and crosslinked peptides.
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://glycospectrumannotator-gmu4m2yacqcnejzuk5krxs.streamlit.app/)
 [![PyPI version](https://badge.fury.io/py/spectrum-annotator-ddzby.svg)](https://badge.fury.io/py/spectrum-annotator-ddzby)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**🚀 [Try the Live Demo](https://glycospectrumannotator-gmu4m2yacqcnejzuk5krxs.streamlit.app/)** - No installation required!
 
 **[User Manual](docs/USER_MANUAL.md)** - Detailed installation and usage guide for Windows, macOS, and Linux
 
@@ -96,7 +99,7 @@ xl_fragments = generate_crosslink_fragments(
 streamlit run app.py
 ```
 
-Or visit the hosted version at: [Coming Soon]
+Or visit the hosted version at: **[glycospectrumannotator.streamlit.app](https://glycospectrumannotator-gmu4m2yacqcnejzuk5krxs.streamlit.app/)**
 
 ## Supported Glycan Compositions
 
