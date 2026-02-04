@@ -11,9 +11,23 @@ Author: Longping Fu
 
 import numpy as np
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional, Set, Union
 import json
 import re
+
+# Import glycan library for extended glycan support
+from .glycan_library import (
+    MONOSACCHARIDE_MASSES,
+    OXONIUM_IONS_EXTENDED,
+    OXONIUM_IONS_O_GLCNAC,
+    OXONIUM_IONS_N_GLYCAN,
+    GlycanComposition,
+    O_GLYCAN_COMPOSITIONS,
+    N_GLYCAN_COMPOSITIONS,
+    generate_y_ion_series,
+    generate_n_glycan_y_ions,
+    identify_glycan_from_mass,
+)
 
 # =============================================================================
 # CONSTANTS: Monoisotopic Masses
@@ -68,6 +82,7 @@ NEUTRAL_LOSSES = {
 }
 
 # Oxonium ions (glycan diagnostic ions) - B-type ions
+# Basic set for O-GlcNAc (default for backwards compatibility)
 OXONIUM_IONS = {
     'HexNAc_TMT': 529.2937,      # HexNAc with TMT oxonium
     'HexNAc+': 300.1308,         # HexNAc + H2O + H
@@ -77,6 +92,9 @@ OXONIUM_IONS = {
     'HexNAc_frag1': 144.0652,    # HexNAc fragment
     'HexNAc_frag2': 138.0546,    # HexNAc fragment
 }
+
+# Alias for extended oxonium ions (imported from glycan_library)
+OXONIUM_IONS_ALL = OXONIUM_IONS_EXTENDED
 
 # Glycan Y ion definitions (peptide + partial glycan)
 # For O-GlcNAc with TMT: Y0 = peptide only, Y1 = peptide + HexNAc+TMT (intact)
@@ -148,17 +166,20 @@ class FragmentCalculator:
     Supports:
     - b, y ions (HCD)
     - c, z ions (ETD)
-    - Y ions (precursor with glycan)
+    - Y ions (precursor with glycan) - simple and extended series
     - Charge-reduced precursor species
-    - Oxonium ions
+    - Oxonium ions - basic and extended sets
     - Neutral losses (H2O, NH3, glycan)
+    - Complex glycans (N-glycans, O-glycans)
     """
 
     def __init__(self,
                  peptide: str,
                  modifications: List[Dict],
                  precursor_charge: int,
-                 max_fragment_charge: int = 2):
+                 max_fragment_charge: int = 2,
+                 glycan_type: str = 'auto',
+                 use_extended_oxonium: bool = False):
         """
         Initialize the fragment calculator.
 
@@ -167,11 +188,16 @@ class FragmentCalculator:
             modifications: List of dicts with 'position', 'residue', 'mass'
             precursor_charge: Precursor ion charge state
             max_fragment_charge: Maximum fragment ion charge (default 2)
+            glycan_type: Type of glycan - 'auto', 'O-GlcNAc', 'O-GalNAc', 'N-glycan',
+                        or a composition string like 'HexNAc2Hex5'
+            use_extended_oxonium: Use extended oxonium ion library (for N-glycans)
         """
         self.peptide = peptide.upper()
         self.length = len(peptide)
         self.precursor_charge = precursor_charge
         self.max_fragment_charge = min(max_fragment_charge, precursor_charge - 1)
+        self.glycan_type_hint = glycan_type
+        self.use_extended_oxonium = use_extended_oxonium
 
         # Parse modifications
         self.modifications = []
@@ -343,7 +369,8 @@ class FragmentCalculator:
 
         return ions
 
-    def calculate_Y_ions(self, charges: List[int] = None) -> List[TheoreticalIon]:
+    def calculate_Y_ions(self, charges: List[int] = None,
+                         extended_series: bool = False) -> List[TheoreticalIon]:
         """
         Calculate glycan Y ions (peptide + partial/no glycan).
 
@@ -356,27 +383,45 @@ class FragmentCalculator:
         For O-GlcNAc (single monosaccharide):
         - Y0 = peptide backbone (glycan completely lost)
         - Y1 = intact glycopeptide
+
+        For N-glycans (extended_series=True):
+        - Y0, Y1, Y2, Y3, Y4, Y(core), Y(intact) + fucose variants
+
+        Args:
+            charges: List of charge states to generate
+            extended_series: Generate full Y ion ladder for complex glycans
         """
         if charges is None:
             charges = list(range(1, self.precursor_charge + 1))
 
         ions = []
 
-        # Determine glycan type and get Y ion losses
+        # Determine glycan type and properties
         glycan_type = self._get_glycan_type()
         glycan_position = self._get_glycan_position()
+        glycan_mass = self._get_glycan_mass()
 
-        if glycan_type and glycan_type in GLYCAN_Y_LOSSES:
+        # Calculate peptide mass without glycan
+        peptide_mass_no_glycan = self.precursor_mass - glycan_mass if glycan_mass else self.precursor_mass
+
+        # Check if we should use extended Y ion series
+        use_extended = extended_series or self.glycan_type_hint == 'N-glycan'
+
+        if use_extended and glycan_mass and glycan_mass > 400:
+            # Use extended Y ion series for complex glycans
+            ions.extend(self._calculate_extended_Y_ions(
+                peptide_mass_no_glycan, glycan_mass, charges
+            ))
+        elif glycan_type and glycan_type in GLYCAN_Y_LOSSES:
+            # Use simple Y ion series for O-GlcNAc
             y_losses = GLYCAN_Y_LOSSES[glycan_type]
 
-            # Calculate each Y ion type
             for y_name, loss_mass in y_losses.items():
                 y_mass = self.precursor_mass - loss_mass
 
                 for charge in charges:
                     mz = (y_mass + charge * PROTON) / charge
 
-                    # Determine Y ion number (0 = no glycan, 1 = full glycan for O-GlcNAc)
                     if 'Y0' in y_name:
                         ion_number = 0
                         annotation = f"{y_name} {charge}+"
@@ -394,7 +439,7 @@ class FragmentCalculator:
                     )
                     ions.append(ion)
 
-        # Always add intact glycopeptide (Y1 or Y-full) at different charge states
+        # Always add intact glycopeptide at different charge states
         for charge in charges:
             mz = (self.precursor_mass + charge * PROTON) / charge
             ion = TheoreticalIon(
@@ -403,21 +448,116 @@ class FragmentCalculator:
                 charge=charge,
                 mz=mz,
                 sequence=self.peptide,
-                annotation=f"Y1 {charge}+" if glycan_type else f"[M+{charge}H]{charge}+"
+                annotation=f"Y(intact) {charge}+" if glycan_type else f"[M+{charge}H]{charge}+"
             )
             ions.append(ion)
 
         return ions
 
-    def _get_glycan_type(self) -> Optional[str]:
-        """Determine the type of glycan modification."""
+    def _calculate_extended_Y_ions(self, peptide_mass: float,
+                                    glycan_mass: float,
+                                    charges: List[int]) -> List[TheoreticalIon]:
+        """
+        Calculate extended Y ion series for complex glycans (N-glycans).
+
+        Generates Y0, Y1, Y2, Y3, Y4, Y(core) ions based on glycan mass.
+        """
+        ions = []
+
+        # Estimate glycan composition from mass
+        hex_mass = MONOSACCHARIDE_MASSES['Hex']
+        hexnac_mass = MONOSACCHARIDE_MASSES['HexNAc']
+        fuc_mass = MONOSACCHARIDE_MASSES['Fuc']
+        neuac_mass = MONOSACCHARIDE_MASSES['NeuAc']
+
+        # Y ion masses (peptide + partial glycan)
+        y_ion_masses = {
+            'Y0': peptide_mass,
+            'Y1': peptide_mass + hexnac_mass,
+            'Y2': peptide_mass + 2 * hexnac_mass,
+            'Y3': peptide_mass + 2 * hexnac_mass + hex_mass,
+            'Y4': peptide_mass + 2 * hexnac_mass + 2 * hex_mass,
+            'Y(core)': peptide_mass + 2 * hexnac_mass + 3 * hex_mass,
+        }
+
+        # Add fucosylated variants if glycan is large enough
+        if glycan_mass > 1000:
+            y_ion_masses['Y1F'] = peptide_mass + hexnac_mass + fuc_mass
+            y_ion_masses['Y2F'] = peptide_mass + 2 * hexnac_mass + fuc_mass
+            y_ion_masses['Y(core)F'] = peptide_mass + 2 * hexnac_mass + 3 * hex_mass + fuc_mass
+
+        # Generate ions for each Y type and charge
+        for y_name, y_mass in y_ion_masses.items():
+            # Skip if Y mass would be larger than precursor
+            if y_mass > self.precursor_mass:
+                continue
+
+            # Extract ion number from name
+            if y_name.startswith('Y('):
+                ion_number = 99  # Special marker for named Y ions
+            else:
+                try:
+                    ion_number = int(y_name[1]) if y_name[1].isdigit() else 0
+                except:
+                    ion_number = 0
+
+            for charge in charges:
+                mz = (y_mass + charge * PROTON) / charge
+
+                ion = TheoreticalIon(
+                    ion_type='Y',
+                    ion_number=ion_number,
+                    charge=charge,
+                    mz=mz,
+                    sequence=self.peptide,
+                    annotation=f"{y_name} {charge}+"
+                )
+                ions.append(ion)
+
+        return ions
+
+    def _get_glycan_mass(self) -> float:
+        """Get the total mass of glycan modification(s)."""
+        glycan_mass = 0.0
         for pos, mod in self.mod_by_position.items():
-            # HexNAc + TMT = 528.2859 Da
+            # Check if this is a glycan modification
+            if abs(mod.mass - MOD_MASSES['HexNAc_TMT']) < 0.1:
+                glycan_mass += mod.mass
+            elif abs(mod.mass - MOD_MASSES['HexNAc']) < 0.1:
+                glycan_mass += mod.mass
+            elif mod.mass > 200 and mod.name and 'glyc' in mod.name.lower():
+                glycan_mass += mod.mass
+            elif mod.mass > 500:  # Likely a complex glycan
+                # Check if it's not TMT
+                if abs(mod.mass - MOD_MASSES.get('TMT6plex', 229.1629)) > 0.1:
+                    glycan_mass += mod.mass
+        return glycan_mass
+
+    def _get_glycan_type(self) -> Optional[str]:
+        """
+        Determine the type of glycan modification.
+
+        Returns:
+            Glycan type string: 'HexNAc_TMT', 'HexNAc', 'N-glycan', or None
+        """
+        # If user specified glycan type, use that
+        if self.glycan_type_hint and self.glycan_type_hint != 'auto':
+            return self.glycan_type_hint
+
+        for pos, mod in self.mod_by_position.items():
+            # HexNAc + TMT = 528.2859 Da (O-GlcNAc with TMT)
             if abs(mod.mass - MOD_MASSES['HexNAc_TMT']) < 0.1:
                 return 'HexNAc_TMT'
-            # HexNAc only (metabolic labeling) = 203.0794 Da
+            # HexNAc only = 203.0794 Da (O-GlcNAc without TMT)
             elif abs(mod.mass - MOD_MASSES['HexNAc']) < 0.1:
                 return 'HexNAc'
+            # Large glycan mass suggests N-glycan (>800 Da is likely trimannosyl core)
+            elif mod.mass > 800:
+                return 'N-glycan'
+            # Medium glycan mass could be complex O-glycan
+            elif mod.mass > 350:
+                return 'O-glycan'
+
         return None
 
     def calculate_charge_reduced_precursor(self) -> List[TheoreticalIon]:
@@ -462,11 +602,36 @@ class FragmentCalculator:
 
         return ions
 
-    def calculate_oxonium_ions(self) -> List[TheoreticalIon]:
-        """Calculate glycan oxonium (diagnostic) ions."""
+    def calculate_oxonium_ions(self, use_extended: bool = None) -> List[TheoreticalIon]:
+        """
+        Calculate glycan oxonium (diagnostic) ions.
+
+        Args:
+            use_extended: Use extended oxonium ion library. If None, uses
+                         self.use_extended_oxonium setting.
+
+        Returns:
+            List of oxonium ion TheoreticalIon objects
+        """
         ions = []
 
-        for name, mz in OXONIUM_IONS.items():
+        if use_extended is None:
+            use_extended = self.use_extended_oxonium
+
+        # Select oxonium ion set based on glycan type and settings
+        if use_extended:
+            oxonium_set = OXONIUM_IONS_EXTENDED
+        else:
+            # Auto-select based on detected glycan type
+            glycan_type = self._get_glycan_type()
+            if glycan_type in ['HexNAc_TMT', 'HexNAc', 'O-GlcNAc', 'O-GalNAc']:
+                oxonium_set = OXONIUM_IONS_O_GLCNAC
+            elif glycan_type == 'N-glycan':
+                oxonium_set = OXONIUM_IONS_N_GLYCAN
+            else:
+                oxonium_set = OXONIUM_IONS
+
+        for name, mz in oxonium_set.items():
             ion = TheoreticalIon(
                 ion_type='oxonium',
                 ion_number=0,
