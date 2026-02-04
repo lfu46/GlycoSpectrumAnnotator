@@ -6,6 +6,8 @@ Universal MS/MS spectrum annotation tool for glycopeptides and crosslinked pepti
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+**[User Manual](docs/USER_MANUAL.md)** - Detailed installation and usage guide for Windows, macOS, and Linux
+
 ## Features
 
 ### Glycopeptide Annotation
@@ -22,6 +24,13 @@ Universal MS/MS spectrum annotation tool for glycopeptides and crosslinked pepti
 ### Quality Assessment
 - **False Match Rate**: Spectrum shifting method (Schulte et al., Anal. Chem. 2025)
 - **Annotation statistics**: Coverage, matched peaks, intensity
+
+## Two Ways to Use
+
+1. **Web Interface** (No coding required) - Interactive browser-based annotation
+2. **Python API** - For batch processing and pipeline integration
+
+See the **[User Manual](docs/USER_MANUAL.md)** for step-by-step instructions.
 
 ## Installation
 
