@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectrum-annotator-ddzby"
-version = "0.2.0"
+version = "0.3.0"
 description = "Universal MS/MS spectrum annotation tool for glycopeptides and crosslinked peptides"
 readme = "README.md"
 license = {text = "MIT"}

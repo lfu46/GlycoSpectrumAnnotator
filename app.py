@@ -839,7 +839,7 @@ with tab4:
 # Footer
 st.markdown("---")
 st.markdown(
-    "<p style='text-align: center; color: #888;'>Spectrum Annotator Ddzby v0.2.0 | "
+    "<p style='text-align: center; color: #888;'>Spectrum Annotator Ddzby v0.3.0 |"
     "Developed by Longping Fu | "
     "<a href='https://github.com/lfu46/GlycoSpectrumAnnotator'>GitHub</a></p>",
     unsafe_allow_html=True
