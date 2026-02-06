@@ -75,7 +75,8 @@ class SpectrumAnnotator:
                  exp_intensity: np.ndarray,
                  tolerance_ppm: float = 20.0,
                  site_index: str = "",
-                 gene: str = ""):
+                 gene: str = "",
+                 activation_type: str = "HCD"):
         """
         Initialize the spectrum annotator.
 
@@ -89,6 +90,7 @@ class SpectrumAnnotator:
             tolerance_ppm: Mass tolerance for matching (default 20 ppm)
             site_index: Site identifier (e.g., "Q96KR1_S195")
             gene: Gene name
+            activation_type: Fragmentation method - "HCD" (b/y ions) or "EThcD" (b/y/c/z ions)
         """
         self.peptide = peptide
         self.modifications = modifications
@@ -99,17 +101,28 @@ class SpectrumAnnotator:
         self.tolerance_ppm = tolerance_ppm
         self.site_index = site_index
         self.gene = gene
+        self.activation_type = activation_type.upper()
 
         # Calculate theoretical fragments
         self.calculator = FragmentCalculator(
             peptide, modifications, precursor_charge, max_fragment_charge=2
         )
 
-        # Get all theoretical ions
-        self.theoretical_ions = self.calculator.get_all_ions_flat(
-            include_neutral_losses=True,
-            neutral_loss_types=['H2O', 'NH3', 'HexNAc_TMT', 'HexNAc']
-        )
+        # Get theoretical ions based on activation type
+        if self.activation_type == "HCD":
+            # HCD: only b, y, Y, precursor, oxonium (no c/z ions)
+            # Note: NO glycan neutral losses - they don't provide localization info
+            self.theoretical_ions = self.calculator.get_hcd_ions_flat(
+                include_neutral_losses=True,
+                neutral_loss_types=['H2O', 'NH3']  # No glycan losses
+            )
+        else:
+            # EThcD or other: include all ions (b, y, c, z, Y, precursor, oxonium)
+            # Note: NO glycan neutral losses - they don't provide localization info
+            self.theoretical_ions = self.calculator.get_all_ions_flat(
+                include_neutral_losses=True,
+                neutral_loss_types=['H2O', 'NH3']  # No glycan losses
+            )
 
         # Match peaks
         self.matched_ions = match_peaks(
@@ -155,6 +168,10 @@ class SpectrumAnnotator:
             else:  # Y1 - intact glycopeptide
                 return ION_COLORS.get('Y1', ION_COLORS['Y'])
 
+        # Site-determining ions (with glycan) always use solid colors
+        if ion.has_modification:
+            return ION_COLORS.get(ion_type, ION_COLORS['unassigned'])
+
         if has_neutral_loss:
             return ION_COLORS_NL.get(f'{ion_type}_NL', ION_COLORS.get(ion_type, ION_COLORS['unassigned']))
         return ION_COLORS.get(ion_type, ION_COLORS['unassigned'])
@@ -175,11 +192,13 @@ class SpectrumAnnotator:
         else:
             # b, y, c, z ions
             charge_str = "" if ion.charge == 1 else f" {ion.charge}+"  # Add space before charge
+            # Add glycan marker if ion contains glycan (use short form for display)
+            glycan_str = "+HexNAc" if ion.has_modification else ""
             nl_str = ""
             if ion.neutral_loss:
-                nl_map = {'H2O': '°', 'NH3': '*', 'HexNAc_TMT': '-Glyc', 'HexNAc': '-Hex'}
+                nl_map = {'H2O': '°', 'NH3': '*', 'CO2': '**', 'HexNAc_TMT': '-Glyc', 'HexNAc': '-Hex'}
                 nl_str = nl_map.get(ion.neutral_loss, f'-{ion.neutral_loss}')
-            return f"{ion.ion_type}{ion.ion_number}{nl_str}{charge_str}"
+            return f"{ion.ion_type}{ion.ion_number}{glycan_str}{nl_str}{charge_str}"
 
     def _get_fragmentation_coverage(self) -> Dict[str, set]:
         """Get which peptide bonds were fragmented by each ion type.
@@ -199,6 +218,24 @@ class SpectrumAnnotator:
                 coverage[ion.ion_type].add(ion.ion_number)
 
         return coverage
+
+    def _get_glycan_containing_ions(self) -> Dict[str, set]:
+        """Get which matched ions contain the glycan (site-determining ions).
+
+        Returns a dict mapping ion type to set of ion numbers that contain glycan.
+        """
+        glycan_ions = {
+            'b': set(),
+            'c': set(),
+            'y': set(),
+            'z': set(),
+        }
+
+        for ion in self.matched_ions:
+            if ion.ion_type in glycan_ions and ion.has_modification:
+                glycan_ions[ion.ion_type].add(ion.ion_number)
+
+        return glycan_ions
 
     def plot(self,
              figsize: Tuple[float, float] = (7, 5),
@@ -247,11 +284,13 @@ class SpectrumAnnotator:
         # 1. Peptide Sequence with Fragmentation Sites (IPSA-style)
         # =====================================================================
         ax_seq.set_xlim(-0.5, len(self.peptide) + 0.5)
-        ax_seq.set_ylim(-0.3, 1.3)
+        ax_seq.set_ylim(-0.5, 1.5)  # Expanded for ion labels
         ax_seq.axis('off')
 
         # Get fragmentation coverage by ion type
         coverage = self._get_fragmentation_coverage()
+        # Get glycan-containing (site-determining) ions
+        glycan_ions = self._get_glycan_containing_ions()
 
         # Draw peptide sequence (no boxes, Arial font, size 8)
         for i, aa in enumerate(self.peptide):
@@ -275,29 +314,51 @@ class SpectrumAnnotator:
                 # Base position for marks (between amino acids)
                 x_base = i + 0.85
 
-                # N-terminal ions (b/c) - vertical from middle up, then diagonal up-right
+                # N-terminal ions (b/c) - vertical from middle up, then diagonal up-LEFT
+                # (b ions cover residues TO THE LEFT of cleavage)
                 # b ions (blue) - longer vertical
                 if bond_pos in coverage['b']:
                     y_top_b = 0.9  # longer vertical
-                    ax_seq.plot([x_base, x_base], [0.5, y_top_b], color=ION_COLORS['b'], linewidth=1.5)  # vertical
-                    ax_seq.plot([x_base, x_base + 0.15], [y_top_b, y_top_b + 0.10], color=ION_COLORS['b'], linewidth=1.5)  # diagonal
+                    # Use thicker line if glycan-containing (site-determining)
+                    lw = 2.5 if bond_pos in glycan_ions['b'] else 1.5
+                    ax_seq.plot([x_base, x_base], [0.5, y_top_b], color=ION_COLORS['b'], linewidth=lw)  # vertical
+                    ax_seq.plot([x_base, x_base - 0.15], [y_top_b, y_top_b + 0.10], color=ION_COLORS['b'], linewidth=lw)  # diagonal LEFT
+                    # Add label for site-determining ions (b ions cover residues to the LEFT)
+                    if bond_pos in glycan_ions['b']:
+                        ax_seq.text(x_base - 0.6, y_top_b + 0.25, f'←b{bond_pos}+G', fontsize=5,
+                                   color=ION_COLORS['b'], fontweight='bold', fontfamily='Arial')
                 # c ions (green) - shorter vertical
                 if bond_pos in coverage['c']:
                     y_top_c = 0.75  # shorter vertical
-                    ax_seq.plot([x_base, x_base], [0.5, y_top_c], color=ION_COLORS['c'], linewidth=1.5)  # vertical
-                    ax_seq.plot([x_base, x_base + 0.15], [y_top_c, y_top_c + 0.10], color=ION_COLORS['c'], linewidth=1.5)  # diagonal
+                    lw = 2.5 if bond_pos in glycan_ions['c'] else 1.5
+                    ax_seq.plot([x_base, x_base], [0.5, y_top_c], color=ION_COLORS['c'], linewidth=lw)  # vertical
+                    ax_seq.plot([x_base, x_base - 0.15], [y_top_c, y_top_c + 0.10], color=ION_COLORS['c'], linewidth=lw)  # diagonal LEFT
+                    if bond_pos in glycan_ions['c']:
+                        ax_seq.text(x_base - 0.6, y_top_c + 0.15, f'←c{bond_pos}+G', fontsize=5,
+                                   color=ION_COLORS['c'], fontweight='bold', fontfamily='Arial')
 
-                # C-terminal ions (y/z) - vertical from middle down, then diagonal down-left
+                # C-terminal ions (y/z) - vertical from middle down, then diagonal down-RIGHT
+                # (y ions cover residues TO THE RIGHT of cleavage)
                 # y ions (red) - longer vertical
                 if c_bond in coverage['y']:
                     y_bot_y = 0.1  # longer vertical (goes lower)
-                    ax_seq.plot([x_base, x_base], [0.5, y_bot_y], color=ION_COLORS['y'], linewidth=1.5)  # vertical
-                    ax_seq.plot([x_base, x_base - 0.15], [y_bot_y, y_bot_y - 0.10], color=ION_COLORS['y'], linewidth=1.5)  # diagonal
+                    lw = 2.5 if c_bond in glycan_ions['y'] else 1.5
+                    ax_seq.plot([x_base, x_base], [0.5, y_bot_y], color=ION_COLORS['y'], linewidth=lw)  # vertical
+                    ax_seq.plot([x_base, x_base + 0.15], [y_bot_y, y_bot_y - 0.10], color=ION_COLORS['y'], linewidth=lw)  # diagonal RIGHT
+                    if c_bond in glycan_ions['y']:
+                        # For y ions, show label with arrow pointing right (→) to indicate
+                        # the ion covers residues TO THE RIGHT of the cleavage site
+                        ax_seq.text(x_base + 0.2, y_bot_y - 0.30, f'y{c_bond}+G→', fontsize=5,
+                                   color=ION_COLORS['y'], fontweight='bold', fontfamily='Arial')
                 # z ions (orange) - shorter vertical
                 if c_bond in coverage['z']:
                     y_bot_z = 0.25  # shorter vertical (doesn't go as low)
-                    ax_seq.plot([x_base, x_base], [0.5, y_bot_z], color=ION_COLORS['z'], linewidth=1.5)  # vertical
-                    ax_seq.plot([x_base, x_base - 0.15], [y_bot_z, y_bot_z - 0.10], color=ION_COLORS['z'], linewidth=1.5)  # diagonal
+                    lw = 2.5 if c_bond in glycan_ions['z'] else 1.5
+                    ax_seq.plot([x_base, x_base], [0.5, y_bot_z], color=ION_COLORS['z'], linewidth=lw)  # vertical
+                    ax_seq.plot([x_base, x_base + 0.15], [y_bot_z, y_bot_z - 0.10], color=ION_COLORS['z'], linewidth=lw)  # diagonal RIGHT
+                    if c_bond in glycan_ions['z']:
+                        ax_seq.text(x_base + 0.2, y_bot_z - 0.20, f'z{c_bond}+G→', fontsize=5,
+                                   color=ION_COLORS['z'], fontweight='bold', fontfamily='Arial')
 
         # =====================================================================
         # 2. Info Panel (with False Match Rate)
@@ -344,8 +405,16 @@ class SpectrumAnnotator:
         labels_added = 0
         labeled_positions = []  # Track label positions to avoid overlap
 
-        # Sort matched ions by intensity for labeling priority
-        sorted_matched = sorted(self.matched_ions, key=lambda x: x.exp_intensity, reverse=True)
+        # Sort matched ions for labeling priority:
+        # 1. Site-determining ions (has_modification=True) get highest priority
+        # 2. Then by intensity (highest first)
+        def label_priority(ion):
+            # Priority: glycan-containing ions first (0), then others (1)
+            # Within each group, sort by intensity (descending, so negate)
+            priority = 0 if ion.has_modification else 1
+            return (priority, -ion.exp_intensity)
+
+        sorted_matched = sorted(self.matched_ions, key=label_priority)
 
         for ion in sorted_matched:
             color = self._get_ion_color(ion, bool(ion.neutral_loss))
@@ -418,6 +487,12 @@ class SpectrumAnnotator:
         ax_spec.legend(handles=legend_elements, loc='upper right', fontsize=7, ncol=4,
                       prop={'family': 'Arial', 'size': 7}, handlelength=1.2, handletextpad=0.4,
                       columnspacing=0.8, borderpad=0.4)
+
+        # Add annotation symbol legend (neutral losses and glycan)
+        symbol_legend = "+HexNAc: with glycan    °: -H2O    *: -NH3    **: -CO2"
+        ax_spec.text(0.02, 0.97, symbol_legend, transform=ax_spec.transAxes,
+                    fontsize=6, fontfamily='Arial', color='#555555',
+                    verticalalignment='top', horizontalalignment='left')
 
         # Title
         fig.suptitle(f'{self.gene} - {self.site_index}', fontsize=10, fontweight='bold',

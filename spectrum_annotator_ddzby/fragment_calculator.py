@@ -77,7 +77,8 @@ ELECTRON = 0.000549
 NEUTRAL_LOSSES = {
     'H2O': 18.010565,
     'NH3': 17.026549,
-    'HexNAc_TMT': 528.2859,  # Loss of glycan with TMT
+    'CO2': 43.989829,         # Loss of CO2 (common for acidic residues)
+    'HexNAc_TMT': 528.2859,   # Loss of glycan with TMT
     'HexNAc': 300.1308,       # Loss of glycan (oxonium form)
 }
 
@@ -145,6 +146,7 @@ class TheoreticalIon:
     sequence: str       # Fragment sequence
     neutral_loss: str = ""  # Neutral loss type if any
     annotation: str = ""    # Full annotation string
+    has_modification: bool = False  # Whether ion contains glycan/modification (marked with * in annotation)
 
 
 @dataclass
@@ -247,26 +249,58 @@ class FragmentCalculator:
         return mass
 
     def _get_glycan_position(self) -> Optional[int]:
-        """Find the position of the glycan modification (528.2859 mass)."""
+        """Find the position of the glycan modification.
+
+        Recognizes multiple mass formats:
+        - 528.2859: HexNAc + TMT
+        - 203.0794: HexNAc (standard)
+        - 299.123: HexNAc (OPair format, includes linkage oxygen)
+        """
         for pos, mod in self.mod_by_position.items():
-            if abs(mod.mass - MOD_MASSES['HexNAc_TMT']) < 0.01:
+            if abs(mod.mass - MOD_MASSES['HexNAc_TMT']) < 0.1:
+                return pos
+            elif abs(mod.mass - MOD_MASSES['HexNAc']) < 0.1:
+                return pos
+            # OPair format: 299.123 (HexNAc with linkage oxygen, ~300 Da)
+            elif abs(mod.mass - 299.123) < 0.5:
                 return pos
         return None
+
+    def _get_glycan_label(self) -> str:
+        """Get the label string for the glycan modification type."""
+        for pos, mod in self.mod_by_position.items():
+            if abs(mod.mass - MOD_MASSES['HexNAc_TMT']) < 0.1:
+                return '+HexNAc'  # HexNAc with TMT (abbreviated, TMT is on peptide N-term)
+            elif abs(mod.mass - MOD_MASSES['HexNAc']) < 0.1:
+                return '+HexNAc'
+            # OPair format: 299.123 (HexNAc with linkage oxygen)
+            elif abs(mod.mass - 299.123) < 0.5:
+                return '+HexNAc'
+        return '+Glyc'  # Fallback for unknown glycan types
 
     def calculate_b_ions(self, charges: List[int] = None) -> List[TheoreticalIon]:
         """
         Calculate b ions (N-terminal, HCD).
         b_n = sum of first n residues + N-term mod + H+
+
+        Ions containing the glycan site are marked with '*' in annotation.
         """
         if charges is None:
             charges = list(range(1, self.max_fragment_charge + 1))
 
         ions = []
         cumulative_mass = self.nterm_mod_mass
+        glycan_pos = self._get_glycan_position()
+        glycan_label = self._get_glycan_label()
 
         for i in range(self.length - 1):  # b1 to b(n-1)
             cumulative_mass += self.residue_masses[i]
             ion_mass = cumulative_mass + ION_ADJUSTMENTS['b'] - PROTON  # Neutral mass
+
+            # Check if this ion contains the glycan site
+            # b_n contains positions 1 to n, so contains glycan if glycan_pos <= n
+            has_glycan = glycan_pos is not None and glycan_pos <= (i + 1)
+            glycan_marker = glycan_label if has_glycan else ''
 
             for charge in charges:
                 mz = (ion_mass + charge * PROTON) / charge
@@ -276,7 +310,8 @@ class FragmentCalculator:
                     charge=charge,
                     mz=mz,
                     sequence=self.peptide[:i+1],
-                    annotation=f"b{i+1}{'⁺' * charge}"
+                    annotation=f"b{i+1}{glycan_marker}{'⁺' * charge}",
+                    has_modification=has_glycan
                 )
                 ions.append(ion)
 
@@ -286,26 +321,38 @@ class FragmentCalculator:
         """
         Calculate y ions (C-terminal, HCD).
         y_n = sum of last n residues + C-term mod + H2O + H+
+
+        Ions containing the glycan site are marked with '*' in annotation.
         """
         if charges is None:
             charges = list(range(1, self.max_fragment_charge + 1))
 
         ions = []
         cumulative_mass = self.cterm_mod_mass
+        glycan_pos = self._get_glycan_position()
+        glycan_label = self._get_glycan_label()
 
         for i in range(self.length - 1):  # y1 to y(n-1)
             cumulative_mass += self.residue_masses[self.length - 1 - i]
             ion_mass = cumulative_mass + ION_ADJUSTMENTS['y'] - PROTON  # Neutral mass
 
+            # Check if this ion contains the glycan site
+            # y_n covers positions (length-n+1) to length
+            # Contains glycan if glycan_pos >= (length - n + 1), i.e., n >= (length - glycan_pos + 1)
+            ion_number = i + 1
+            has_glycan = glycan_pos is not None and ion_number >= (self.length - glycan_pos + 1)
+            glycan_marker = glycan_label if has_glycan else ''
+
             for charge in charges:
                 mz = (ion_mass + charge * PROTON) / charge
                 ion = TheoreticalIon(
                     ion_type='y',
-                    ion_number=i + 1,
+                    ion_number=ion_number,
                     charge=charge,
                     mz=mz,
                     sequence=self.peptide[-(i+1):],
-                    annotation=f"y{i+1}{'⁺' * charge}"
+                    annotation=f"y{ion_number}{glycan_marker}{'⁺' * charge}",
+                    has_modification=has_glycan
                 )
                 ions.append(ion)
 
@@ -315,26 +362,37 @@ class FragmentCalculator:
         """
         Calculate c ions (N-terminal, ETD).
         c_n = b_n + NH3 = sum of first n residues + N-term mod + NH3 + H+
+
+        Ions containing the glycan site are marked with '*' in annotation.
         """
         if charges is None:
             charges = list(range(1, self.max_fragment_charge + 1))
 
         ions = []
         cumulative_mass = self.nterm_mod_mass
+        glycan_pos = self._get_glycan_position()
+        glycan_label = self._get_glycan_label()
 
         for i in range(self.length - 1):  # c1 to c(n-1)
             cumulative_mass += self.residue_masses[i]
             ion_mass = cumulative_mass + ION_ADJUSTMENTS['c'] - PROTON  # Neutral mass
 
+            # Check if this ion contains the glycan site
+            # c_n contains positions 1 to n, so contains glycan if glycan_pos <= n
+            ion_number = i + 1
+            has_glycan = glycan_pos is not None and glycan_pos <= ion_number
+            glycan_marker = glycan_label if has_glycan else ''
+
             for charge in charges:
                 mz = (ion_mass + charge * PROTON) / charge
                 ion = TheoreticalIon(
                     ion_type='c',
-                    ion_number=i + 1,
+                    ion_number=ion_number,
                     charge=charge,
                     mz=mz,
                     sequence=self.peptide[:i+1],
-                    annotation=f"c{i+1}{'⁺' * charge}"
+                    annotation=f"c{ion_number}{glycan_marker}{'⁺' * charge}",
+                    has_modification=has_glycan
                 )
                 ions.append(ion)
 
@@ -344,26 +402,38 @@ class FragmentCalculator:
         """
         Calculate z ions (C-terminal, ETD).
         z_n = y_n - NH3 (z-radical ion)
+
+        Ions containing the glycan site are marked with '*' in annotation.
         """
         if charges is None:
             charges = list(range(1, self.max_fragment_charge + 1))
 
         ions = []
         cumulative_mass = self.cterm_mod_mass
+        glycan_pos = self._get_glycan_position()
+        glycan_label = self._get_glycan_label()
 
         for i in range(self.length - 1):  # z1 to z(n-1)
             cumulative_mass += self.residue_masses[self.length - 1 - i]
             ion_mass = cumulative_mass + ION_ADJUSTMENTS['z'] - PROTON  # Neutral mass
 
+            # Check if this ion contains the glycan site
+            # z_n covers positions (length-n+1) to length
+            # Contains glycan if glycan_pos >= (length - n + 1), i.e., n >= (length - glycan_pos + 1)
+            ion_number = i + 1
+            has_glycan = glycan_pos is not None and ion_number >= (self.length - glycan_pos + 1)
+            glycan_marker = glycan_label if has_glycan else ''
+
             for charge in charges:
                 mz = (ion_mass + charge * PROTON) / charge
                 ion = TheoreticalIon(
                     ion_type='z',
-                    ion_number=i + 1,
+                    ion_number=ion_number,
                     charge=charge,
                     mz=mz,
                     sequence=self.peptide[-(i+1):],
-                    annotation=f"z{i+1}{'⁺' * charge}"
+                    annotation=f"z{ion_number}{glycan_marker}{'⁺' * charge}",
+                    has_modification=has_glycan
                 )
                 ions.append(ion)
 
@@ -525,6 +595,9 @@ class FragmentCalculator:
                 glycan_mass += mod.mass
             elif abs(mod.mass - MOD_MASSES['HexNAc']) < 0.1:
                 glycan_mass += mod.mass
+            # OPair format: 299.123 (HexNAc with linkage oxygen)
+            elif abs(mod.mass - 299.123) < 0.5:
+                glycan_mass += mod.mass
             elif mod.mass > 200 and mod.name and 'glyc' in mod.name.lower():
                 glycan_mass += mod.mass
             elif mod.mass > 500:  # Likely a complex glycan
@@ -550,6 +623,9 @@ class FragmentCalculator:
                 return 'HexNAc_TMT'
             # HexNAc only = 203.0794 Da (O-GlcNAc without TMT)
             elif abs(mod.mass - MOD_MASSES['HexNAc']) < 0.1:
+                return 'HexNAc'
+            # OPair format: 299.123 (HexNAc with linkage oxygen)
+            elif abs(mod.mass - 299.123) < 0.5:
                 return 'HexNAc'
             # Large glycan mass suggests N-glycan (>800 Da is likely trimannosyl core)
             elif mod.mass > 800:
@@ -687,7 +763,8 @@ class FragmentCalculator:
                         mz=new_mz,
                         sequence=base_ion.sequence,
                         neutral_loss=loss_type,
-                        annotation=f"{base_ion.annotation}-{loss_type}"
+                        annotation=f"{base_ion.annotation}-{loss_type}",
+                        has_modification=base_ion.has_modification  # Inherit from base ion
                     )
                     ions.append(ion)
 
@@ -697,12 +774,16 @@ class FragmentCalculator:
                           include_neutral_losses: bool = True,
                           neutral_loss_types: List[str] = None) -> Dict[str, List[TheoreticalIon]]:
         """
-        Calculate all theoretical ions for the peptide.
+        Calculate all theoretical ions for the peptide (including c/z for EThcD).
+
+        Note: Glycan neutral losses are NOT included by default because they
+        don't provide localization information.
 
         Returns dict organized by ion type.
         """
         if neutral_loss_types is None:
-            neutral_loss_types = ['H2O', 'NH3', 'HexNAc_TMT', 'HexNAc']
+            # Only H2O and NH3 losses - NO glycan losses
+            neutral_loss_types = ['H2O', 'NH3', 'CO2']
 
         result = {
             'b': self.calculate_b_ions(),
@@ -721,6 +802,49 @@ class FragmentCalculator:
                 result[f'{ion_type}_NL'] = nl_ions
 
         return result
+
+    def calculate_hcd_ions(self,
+                          include_neutral_losses: bool = True,
+                          neutral_loss_types: List[str] = None) -> Dict[str, List[TheoreticalIon]]:
+        """
+        Calculate theoretical ions for HCD spectra only.
+
+        Includes: b, y, Y (intact glycopeptide), precursor, oxonium
+        Excludes: c, z (ETD-specific ions)
+
+        Note: For glycopeptides, glycan neutral losses (HexNAc_TMT, HexNAc) are NOT
+        included because they result in bare peptide ions that don't provide
+        localization information. Only H2O and NH3 losses are included.
+
+        Returns dict organized by ion type.
+        """
+        if neutral_loss_types is None:
+            # Only H2O and NH3 losses - NO glycan losses for localization analysis
+            neutral_loss_types = ['H2O', 'NH3', 'CO2']
+
+        result = {
+            'b': self.calculate_b_ions(),
+            'y': self.calculate_y_ions(),
+            'Y': self.calculate_Y_ions(),
+            'precursor': self.calculate_precursor_isotopes() + self.calculate_charge_reduced_precursor(),
+            'oxonium': self.calculate_oxonium_ions(),
+        }
+
+        if include_neutral_losses:
+            # Add neutral losses for backbone ions (b and y only, no c/z)
+            for ion_type in ['b', 'y']:
+                nl_ions = self.calculate_neutral_loss_ions(result[ion_type], neutral_loss_types)
+                result[f'{ion_type}_NL'] = nl_ions
+
+        return result
+
+    def get_hcd_ions_flat(self, **kwargs) -> List[TheoreticalIon]:
+        """Get HCD-appropriate ions as a flat list (no c/z ions)."""
+        all_ions = self.calculate_hcd_ions(**kwargs)
+        flat_list = []
+        for ion_list in all_ions.values():
+            flat_list.extend(ion_list)
+        return flat_list
 
     def get_all_ions_flat(self, **kwargs) -> List[TheoreticalIon]:
         """Get all ions as a flat list."""
@@ -817,6 +941,7 @@ def match_peaks(theoretical_ions: List[TheoreticalIon],
                             sequence=ion.sequence,
                             neutral_loss=ion.neutral_loss,
                             annotation=annotation,
+                            has_modification=ion.has_modification,  # Copy from theoretical ion
                             exp_mz=exp_mz[idx],
                             exp_intensity=exp_intensity[idx],
                             mass_error_ppm=error_ppm
