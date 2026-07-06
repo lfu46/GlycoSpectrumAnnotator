@@ -37,6 +37,11 @@ from .annotator import (
     ION_COLORS,
 )
 
+from .ms1_window import (
+    plot_ms1_isolation_window,
+    MS1WindowResult,
+)
+
 from .glycan_library import (
     # Monosaccharide masses
     MONOSACCHARIDE_MASSES,
@@ -51,6 +56,9 @@ from .glycan_library import (
     # Y ion generation
     generate_y_ion_series,
     generate_n_glycan_y_ions,
+    # N-glycan HCD fragment generators (composition-aware remainder b/y + B-ions)
+    generate_n_glycan_remainders,
+    generate_n_glycan_bions,
     # Utilities
     identify_glycan_from_mass,
     get_glycan_mass,
@@ -83,8 +91,12 @@ __all__ = [
     "calculate_annotation_statistics",
     "parse_modifications_from_string",
     "annotate_spectra_batch",
+    "plot_ms1_isolation_window",
+    "MS1WindowResult",
     "generate_y_ion_series",
     "generate_n_glycan_y_ions",
+    "generate_n_glycan_remainders",
+    "generate_n_glycan_bions",
     "identify_glycan_from_mass",
     "get_glycan_mass",
     "parse_proforma_glycan",

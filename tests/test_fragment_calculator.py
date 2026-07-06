@@ -10,7 +10,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '..')
 
-from glycospectrum import (
+from spectrum_annotator_ddzby import (
     FragmentCalculator,
     TheoreticalIon,
     parse_modifications_from_string,

@@ -251,7 +251,11 @@ OXONIUM_IONS_EXTENDED = {
 
     # Trisaccharide oxonium ions
     'HexNAc-Hex-NeuAc': 657.2349,    # Common sialylated fragment
-    'HexNAc-Hex-Hex': 528.1923,      # HexNAc + 2Hex
+    'HexNAc-2Hex': 528.1923,         # HexNAc + 2Hex (high-mannose arm)
+
+    # Tetrasaccharide+ oxonium ions (high-mannose glycan arm fragments)
+    'HexNAc-3Hex': 690.2451,         # HexNAc + 3Hex
+    'HexNAc-4Hex': 852.2979,         # HexNAc + 4Hex
 
     # TMT-modified oxonium ions (for TMT-labeled glycopeptides)
     'HexNAc-TMT': 529.2937,          # [HexNAc + TMT + H]+
@@ -272,6 +276,8 @@ OXONIUM_IONS_O_GLCNAC = {
 OXONIUM_IONS_N_GLYCAN = {
     'HexNAc': 204.0867,
     'HexNAc-H2O': 186.0761,
+    'HexNAc-2H2O': 168.0655,
+    'HexNAc_138': 138.0550,
     'Hex': 163.0601,
     'Hex-H2O': 145.0495,
     'NeuAc': 292.1027,
@@ -280,7 +286,33 @@ OXONIUM_IONS_N_GLYCAN = {
     'HexNAc-Hex': 366.1395,
     'HexNAc-Hex-H2O': 348.1289,
     'HexNAc-NeuAc': 495.1821,
+    'HexNAc-2Hex': 528.1923,         # HexNAc + 2Hex (high-mannose arm)
     'HexNAc-Hex-NeuAc': 657.2349,
+    'HexNAc-3Hex': 690.2451,         # HexNAc + 3Hex (high-mannose arm)
+    'HexNAc-4Hex': 852.2979,         # HexNAc + 4Hex (high-mannose arm)
+}
+
+# Extended set for O-glycan analysis (mucin-type cores 1/2/3/4 + sialylation/fucosylation).
+# Excludes high-mannose-style ions like HexNAc-2Hex / HexNAc-3Hex / HexNAc-4Hex which
+# do not occur in typical mucin-type O-glycan fragmentation.
+OXONIUM_IONS_O_GLYCAN = {
+    'HexNAc_126':       126.0550,
+    'HexNAc_138':       138.0550,
+    'HexNAc_144':       144.0656,
+    'Fuc':              147.0652,
+    'Hex':              163.0601,
+    'HexNAc-2H2O':      168.0655,
+    'HexNAc-H2O':       186.0761,
+    'HexNAc':           204.0867,
+    'NeuAc-H2O':        274.0921,
+    'NeuAc':            292.1027,
+    'HexNAc+':          300.1308,   # HexNAc + H2O + H
+    'HexNAc-Fuc':       350.1340,   # core 1 + Fuc fragment
+    'HexNAc-Hex':       366.1395,   # T-antigen
+    'HexNAc-Hex-Fuc':   512.1974,
+    'HexNAc-NeuAc':     495.1821,   # sialyl-Tn
+    'HexNAc-Hex-NeuAc': 657.2349,   # sialyl-T
+    'HexNAc-TMT':       529.2937,
 }
 
 # =============================================================================
@@ -852,3 +884,313 @@ def parse_proforma_crosslink(proforma_string: str) -> Optional[Tuple[str, str, s
         return (peptide1, peptide2, crosslinker_name)
 
     return None
+
+
+# ============================================================================
+# N-glycan HCD fragment generators (moved from nglyco_annotate_spectra 2026-07-06)
+# Composition-aware remainder b/y masses + diagnostic B-ions, kept in the shared
+# engine so every N-glyco annotator/test draws from one implementation (mirrors
+# generate_n_glycan_y_ions above). Self-contained: local monosaccharide constants
+# preserve exact numeric behavior.
+# ============================================================================
+
+def _classify_glycan_type_simple(glycan_comp):
+    """Lightweight glycan type classification for fragment generation.
+
+    Returns: 'high_mannose', 'paucimannose', 'complex', 'hybrid', or 'unknown'.
+    """
+    n = glycan_comp.get('HexNAc', 0)
+    h = glycan_comp.get('Hex', 0)
+    sia = glycan_comp.get('NeuAc', 0) + glycan_comp.get('NeuGc', 0)
+
+    if n < 2:
+        return 'unknown'
+    if n == 2 and h >= 5 and sia == 0:
+        return 'high_mannose'
+    if n == 2 and h <= 4:
+        return 'paucimannose'
+    if n == 3 and h >= 5:
+        return 'hybrid'
+    if n >= 3:
+        return 'complex'
+    return 'unknown'
+
+
+def generate_n_glycan_remainders(glycan_comp):
+    """
+    Generate biosynthetically valid partial glycan masses for N-glycan HCD.
+
+    Applies glycan-type-aware fragmentation logic based on the N-glycan
+    biosynthetic tree structure:
+
+    High-mannose (N2H5-9):
+        Sequential mannose loss from non-reducing end.  All intermediates
+        N2H3→N2H4→...→N2H(n_hex) are valid (linear mannose tree).
+
+    Complex/hybrid (N3+ H3+):
+        Antennae are GlcNAc-Gal(-NeuAc) units connected to the trimannosyl
+        core through GlcNAc bridges.  Gal CANNOT exist without its preceding
+        GlcNAc (Riley JPR 2020; StrucGAP biosynthetic rules).  Valid
+        intermediates above the core must contain complete or partially-stripped
+        antenna units (GlcNAc, then GlcNAc-Gal, then GlcNAc-Gal-NeuAc).
+
+    Returns dict: {label: mass}. Label '' = bare, 'intact' = full glycan.
+    """
+    N = 203.0794   # HexNAc
+    H = 162.0528   # Hex (Man, Gal, Glc)
+    F = 146.0579   # Fuc
+    A = 291.0954   # NeuAc
+    G = 307.0903   # NeuGc
+
+    n_N = glycan_comp.get('HexNAc', 0)
+    n_H = glycan_comp.get('Hex', 0)
+    n_F = glycan_comp.get('Fuc', 0)
+    n_A = glycan_comp.get('NeuAc', 0)
+    n_G = glycan_comp.get('NeuGc', 0)
+
+    total = n_N * N + n_H * H + n_F * F + n_A * A + n_G * G
+
+    rem = {'': 0.0}  # Y0 / bare (complete glycan loss)
+
+    gtype = _classify_glycan_type_simple(glycan_comp)
+
+    # =================================================================
+    # Chitobiose core ladder — universal for all N-glycans
+    # GlcNAc(β1-4)GlcNAc—Asn
+    # =================================================================
+    if n_N >= 1:
+        rem['+N'] = N                          # Y1: reducing-end GlcNAc
+    if n_N >= 2:
+        rem['+N2'] = 2 * N                     # Y2: chitobiose
+
+    # Trimannosyl core — present in all mature N-glycans
+    if n_N >= 2 and n_H >= 1:
+        rem['+N2H'] = 2 * N + H               # +1 Man
+    if n_N >= 2 and n_H >= 2:
+        rem['+N2H2'] = 2 * N + 2 * H          # +2 Man
+    if n_N >= 2 and n_H >= 3:
+        rem['+N2H3'] = 2 * N + 3 * H          # trimannosyl core
+
+    # =================================================================
+    # High-mannose / paucimannose: linear mannose tree
+    #   Man residues extend from the trimannosyl core on both arms.
+    #   Sequential loss produces N2H3 → N2H4 → ... → N2H(n_hex).
+    #   All intermediates are valid connected subgraphs.
+    # =================================================================
+    if gtype in ('high_mannose', 'paucimannose'):
+        for h in range(4, n_H + 1):
+            rem[f'+N2H{h}'] = 2 * N + h * H
+
+    # =================================================================
+    # Complex / hybrid: antenna-unit-based fragmentation
+    #
+    # Structure of each antenna on the trimannosyl core:
+    #   Core-Man—GlcNAc—Gal(—NeuAc)
+    #
+    # In HCD, terminal residues are lost first (NeuAc, then Gal),
+    # producing these valid intermediates above the core:
+    #
+    #   Core + n_ant × GlcNAc                (Gal all lost)
+    #   Core + n_ant × GlcNAc + k × Gal     (k ≤ n_ant)
+    #   Core + n_ant × GlcNAc + k × Gal + j × NeuAc  (j ≤ k)
+    #
+    # Biosynthetic rule: Gal count ≤ antenna GlcNAc count
+    #   (Gal cannot exist without its preceding GlcNAc bridge)
+    # =================================================================
+    if gtype in ('complex', 'hybrid'):
+        # Number of antennae = HexNAc beyond the chitobiose core
+        n_ant = n_N - 2
+        # Hex beyond the trimannosyl core = galactose on antennae
+        n_gal = max(0, n_H - 3)
+
+        # For hybrid: one arm is high-mannose (extra Man on core).
+        # Treat extra Hex beyond (3 + n_ant) as mannose arm extension.
+        extra_man = max(0, n_H - 3 - n_ant)
+
+        # Hybrid mannose arm extension (added to core before antennae)
+        if gtype == 'hybrid' and extra_man > 0:
+            for m in range(1, extra_man + 1):
+                h_count = 3 + m
+                label = f'+N2H{h_count}'
+                rem[label] = 2 * N + h_count * H
+
+        # Antenna buildup: add GlcNAc one at a time, then Gal, then NeuAc
+        for ant in range(1, n_ant + 1):
+            core_n = 2 + ant     # chitobiose + antenna GlcNAc(s)
+            core_h = 3           # trimannosyl core Man
+            if gtype == 'hybrid':
+                core_h += extra_man  # include hybrid mannose arm
+
+            # Antenna GlcNAc only (all Gal stripped)
+            label_base = f'+N{core_n}H{core_h}'
+            rem[label_base] = core_n * N + core_h * H
+
+            # Add Gal: up to min(ant, n_gal) — can't have more Gal than GlcNAc
+            max_gal = min(ant, n_gal)
+            for gal_k in range(1, max_gal + 1):
+                h_total = core_h + gal_k
+                label_g = f'+N{core_n}H{h_total}'
+                rem[label_g] = core_n * N + h_total * H
+
+                # Add NeuAc: up to min(gal_k, n_A) — NeuAc caps Gal
+                for sia_j in range(1, min(gal_k, n_A) + 1):
+                    label_s = f'+N{core_n}H{h_total}A{sia_j}' if sia_j > 1 else f'+N{core_n}H{h_total}A'
+                    rem[label_s] = core_n * N + h_total * H + sia_j * A
+
+    # =================================================================
+    # Core fucose — only on the reducing-end GlcNAc (FUT8 product)
+    # Add Fuc variant to chitobiose+ structures, not to monosaccharide
+    # =================================================================
+    if n_F >= 1:
+        fuc_additions = {}
+        for label, mass in list(rem.items()):
+            # Core Fuc attaches to reducing-end GlcNAc → require N2+
+            if label and mass >= 2 * N:
+                fuc_additions[f'{label}F'] = mass + F
+        rem.update(fuc_additions)
+
+    # Intact glycopeptide
+    rem['intact'] = total
+
+    # Final filter: no partial glycan should exceed intact mass
+    rem = {k: v for k, v in rem.items() if v <= total + 0.01}
+
+    return rem
+
+
+def generate_n_glycan_bions(glycan_comp):
+    """
+    Generate composition-specific glycan B-ions (oxonium fragments).
+
+    Only returns B-ions whose monosaccharide content is a subset of the
+    actual glycan composition.  Avoids false annotations (e.g. NeuAc
+    oxonium when glycan has no sialic acid, or HexNAc-3Hex for complex
+    glycans where a 3-Hex arm doesn't exist).
+
+    Extended 2026-04-11 with the 17-branch diagnostic B-ion library from
+    Shen et al. Nat Methods 2021 MOESM4 (StrucGP). Adds NeuGc, di-sialyl,
+    di-fucosyl (Lewis-y), LacdiNAc, and sialyl-Lewis-x/a fragment ions
+    when composition allows.
+
+    Returns dict: {name: theoretical_mz} — all singly charged [M+H]+.
+    """
+    PROTON = 1.007276
+    n_N = glycan_comp.get('HexNAc', 0)
+    n_H = glycan_comp.get('Hex', 0)
+    n_F = glycan_comp.get('Fuc', 0)
+    n_A = glycan_comp.get('NeuAc', 0)
+    n_G = glycan_comp.get('NeuGc', 0)
+
+    gtype = _classify_glycan_type_simple(glycan_comp)
+
+    # Monosaccharide residue masses
+    _N = 203.0794    # HexNAc
+    _H = 162.0528    # Hex
+    _F = 146.0579    # Fuc (deoxyhexose)
+    _A = 291.0954    # NeuAc
+    _G = 307.0903    # NeuGc (NeuAc + 16 Da)
+
+    ions = {}
+
+    # --- Always present for N-glycans ---
+    ions['HexNAc'] = _N + PROTON                    # 204.087  (B-1: terminal GlcNAc)
+    ions['HexNAc-H2O'] = _N - 18.0106 + PROTON      # 186.076
+    ions['HexNAc-2H2O'] = _N - 2*18.0106 + PROTON   # 168.066
+    ions['HexNAc_138'] = 138.0550                     # cross-ring
+    ions['Hex'] = _H + PROTON                         # 163.060
+    ions['Hex-H2O'] = _H - 18.0106 + PROTON          # 145.050
+
+    # --- Disaccharides (always: all N-glycans have HexNAc+Hex in core) ---
+    ions['HexNAc-Hex'] = _N + _H + PROTON            # 366.140  (B-2: LacNAc)
+    ions['HexNAc-Hex-H2O'] = _N + _H - 18.0106 + PROTON  # 348.129
+
+    # --- Composition-dependent monosaccharides ---
+    if n_F >= 1:
+        ions['Fuc'] = _F + PROTON                     # 147.065
+    if n_A >= 1:
+        ions['NeuAc'] = _A + PROTON                   # 292.103  (B-3: NeuAc oxonium)
+        ions['NeuAc-H2O'] = _A - 18.0106 + PROTON    # 274.092
+    if n_G >= 1:
+        ions['NeuGc'] = _G + PROTON                   # 308.098  (B-4: NeuGc oxonium)
+        ions['NeuGc-H2O'] = _G - 18.0106 + PROTON    # 290.087
+
+    # --- Composition-dependent disaccharides ---
+    if n_A >= 1:
+        ions['HexNAc-NeuAc'] = _N + _A + PROTON      # 495.182  (B-3 fragment)
+    if n_G >= 1:
+        ions['HexNAc-NeuGc'] = _N + _G + PROTON      # 511.177  (B-4 fragment)
+        ions['Hex-NeuGc'] = _H + _G + PROTON         # 470.151  (B-10 fragment)
+    if n_F >= 1:
+        ions['HexNAc-Fuc'] = _N + _F + PROTON         # 350.145  (core Fuc or Lewis fragment)
+
+    # --- Trisaccharides+ (glycan-type dependent) ---
+    if gtype in ('high_mannose', 'paucimannose', 'hybrid'):
+        # Mannose arm fragments: HexNAc + n×Hex
+        if n_H >= 2:
+            ions['HexNAc-2Hex'] = _N + 2*_H + PROTON   # 528.192
+        if n_H >= 3:
+            ions['HexNAc-3Hex'] = _N + 3*_H + PROTON   # 690.245
+        if n_H >= 4:
+            ions['HexNAc-4Hex'] = _N + 4*_H + PROTON   # 852.298
+
+    if gtype in ('complex', 'hybrid'):
+        # Sialyl-LacNAc fragment: NeuAc-Hex-HexNAc (B-3 full)
+        if n_A >= 1 and n_H >= 4:  # Gal exists on antenna
+            ions['HexNAc-Hex-NeuAc'] = _N + _H + _A + PROTON  # 657.235
+        # NeuGc-LacNAc fragment (B-4 full)
+        if n_G >= 1 and n_H >= 4:
+            ions['HexNAc-Hex-NeuGc'] = _N + _H + _G + PROTON  # 673.230
+
+    # Fucosylated trisaccharide (Lewis epitope): HexNAc-Hex-Fuc
+    if n_F >= 1 and gtype in ('complex', 'hybrid'):
+        ions['HexNAc-Hex-Fuc'] = _N + _H + _F + PROTON  # 512.197 (B-5: Lewis-x/a)
+
+    # ========================================================================
+    # Branch library extensions (Shen 2021 MOESM4)
+    # Composition-conditional additions for complex/hybrid glycans
+    # ========================================================================
+
+    if gtype in ('complex', 'hybrid'):
+        # B-6: Disialyl-LacNAc — NeuAc-NeuAc fragment (m/z 454.156)
+        if n_A >= 2:
+            ions['NeuAc-NeuAc'] = 2*_A - 18.0106 + PROTON   # 583.18 (NeuAc dimer with H2O loss)
+            # Actual disialyl marker is NeuAc-Hex-HexNAc with NeuAc loss = 454.156
+            # This is generated as a specific B-ion: 2*NeuAc - H2O - NeuAc + ...
+            # Use the empirical value from MOESM4
+            ions['Disialyl-marker_454'] = 454.156           # B-6 specific
+
+        # B-8: Sialyl-Lewis-x/a — NeuAc-Fuc-Hex-HexNAc (m/z 803.293)
+        if n_A >= 1 and n_F >= 1:
+            ions['NeuAc-Fuc-Hex-HexNAc'] = _N + _H + _F + _A + PROTON  # 803.293
+
+        # B-11: NeuGc-Lewis — NeuGc-Fuc-Hex-HexNAc (m/z 819.288)
+        if n_G >= 1 and n_F >= 1:
+            ions['NeuGc-Fuc-Hex-HexNAc'] = _N + _H + _F + _G + PROTON  # 819.288
+
+        # B-12: Lewis-y di-fucosylated — HexNAc-Hex-2Fuc (m/z 658.272)
+        if n_F >= 2:
+            ions['HexNAc-Hex-2Fuc'] = _N + _H + 2*_F + PROTON  # 658.272
+
+        # B-13: LacdiNAc — HexNAc-HexNAc dimer (m/z 407.166)
+        # Only when extra HexNAc beyond core+antenna possible (n_N > 4 typically)
+        if n_N >= 4:
+            ions['HexNAc-HexNAc'] = 2*_N + PROTON           # 407.166 (B-13 LDN marker)
+            # B-13 also: HexNAc-Hex-HexNAc (m/z 569.219)
+            ions['HexNAc-Hex-HexNAc'] = 2*_N + _H + PROTON  # 569.219 (LDN or bisect)
+
+        # B-14: LacdiNAc + Fuc (m/z 553.214)
+        if n_N >= 4 and n_F >= 1:
+            ions['HexNAc-HexNAc-Fuc'] = 2*_N + _F + PROTON  # 553.214
+
+        # B-15: NeuAc-LacdiNAc (m/z 698.262)
+        if n_N >= 4 and n_A >= 1:
+            ions['NeuAc-HexNAc-HexNAc'] = 2*_N + _A + PROTON  # 698.262
+
+        # B-7, B-9: Extended di-sialyl fragments
+        if n_A >= 2:
+            ions['NeuAc-NeuAc-Hex-HexNAc'] = _N + _H + 2*_A + PROTON  # 948.328
+        if n_A >= 2 and n_F >= 1:
+            ions['NeuAc-NeuAc-Fuc-Hex-HexNAc'] = _N + _H + _F + 2*_A + PROTON  # 1239.435
+            ions['NeuAc-Fuc-Hex_intermediate'] = _H + _F + _A - 18.0106 + PROTON  # 583.218
+
+    return ions
