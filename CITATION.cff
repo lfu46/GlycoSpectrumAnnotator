@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use GlycoSpectrumAnnotator in your work, please cite it as below."
+title: "GlycoSpectrumAnnotator"
+type: software
+version: 0.3.0
+authors:
+  - family-names: Fu
+    given-names: Longping
+    orcid: "https://orcid.org/0009-0006-4275-3264"
+    affiliation: "Georgia Institute of Technology"
+repository-code: "https://github.com/lfu46/GlycoSpectrumAnnotator"
+url: "https://pypi.org/project/spectrum-annotator-ddzby/"
+license: MIT
+keywords:
+  - mass spectrometry
+  - glycoproteomics
+  - glycopeptide
+  - spectrum annotation
+  - EThcD
+  - crosslinking
+abstract: "Universal MS/MS spectrum annotation tool for glycopeptides and crosslinked peptides, with EThcD support and false-match-rate estimation."
