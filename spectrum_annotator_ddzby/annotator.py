@@ -915,20 +915,21 @@ class SpectrumAnnotator:
                     lw = 2.5 if bond_pos in glycan_ions['b'] else 1.5
                     ax_seq.plot([x_base, x_base], [0.5, y_top_b], color=ION_COLORS['b'], linewidth=lw)
                     ax_seq.plot([x_base, x_base - 0.15], [y_top_b, y_top_b + 0.10], color=ION_COLORS['b'], linewidth=lw)
-                    if bond_pos in glycan_ions['b']:
-                        g_tag = self._get_ion_glycan_label('b', bond_pos)
-                        _arrow_labels_top.append((x_base - 0.6, y_top_b + 0.25,
-                                                  f'←b{bond_pos}{g_tag}', ION_COLORS['b']))
+                    # Every covered bond gets its ion label; the glycan tag joins it only when
+                    # the ion carries one. (Labels were glycan-only before, which left a plain
+                    # peptide's ladder as bare ticks with nothing naming them.)
+                    g_tag = self._get_ion_glycan_label('b', bond_pos) if bond_pos in glycan_ions['b'] else ''
+                    _arrow_labels_top.append((x_base - 0.6, y_top_b + 0.25,
+                                              f'←b{bond_pos}{g_tag}', ION_COLORS['b']))
                 # c ions (green) - shorter vertical
                 if bond_pos in coverage['c']:
                     y_top_c = 0.75
                     lw = 2.5 if bond_pos in glycan_ions['c'] else 1.5
                     ax_seq.plot([x_base, x_base], [0.5, y_top_c], color=ION_COLORS['c'], linewidth=lw)
                     ax_seq.plot([x_base, x_base - 0.15], [y_top_c, y_top_c + 0.10], color=ION_COLORS['c'], linewidth=lw)
-                    if bond_pos in glycan_ions['c']:
-                        g_tag = self._get_ion_glycan_label('c', bond_pos)
-                        _arrow_labels_top.append((x_base - 0.6, y_top_c + 0.15,
-                                                  f'←c{bond_pos}{g_tag}', ION_COLORS['c']))
+                    g_tag = self._get_ion_glycan_label('c', bond_pos) if bond_pos in glycan_ions['c'] else ''
+                    _arrow_labels_top.append((x_base - 0.6, y_top_c + 0.15,
+                                              f'←c{bond_pos}{g_tag}', ION_COLORS['c']))
 
                 # C-terminal ions (y/z) - vertical from middle down, then diagonal down-RIGHT
                 # y ions (red) - longer vertical
@@ -937,20 +938,18 @@ class SpectrumAnnotator:
                     lw = 2.5 if c_bond in glycan_ions['y'] else 1.5
                     ax_seq.plot([x_base, x_base], [0.5, y_bot_y], color=ION_COLORS['y'], linewidth=lw)
                     ax_seq.plot([x_base, x_base + 0.15], [y_bot_y, y_bot_y - 0.10], color=ION_COLORS['y'], linewidth=lw)
-                    if c_bond in glycan_ions['y']:
-                        g_tag = self._get_ion_glycan_label('y', c_bond)
-                        _arrow_labels_bot.append((x_base + 0.2, y_bot_y - 0.30,
-                                                  f'y{c_bond}{g_tag}→', ION_COLORS['y']))
+                    g_tag = self._get_ion_glycan_label('y', c_bond) if c_bond in glycan_ions['y'] else ''
+                    _arrow_labels_bot.append((x_base + 0.2, y_bot_y - 0.30,
+                                              f'y{c_bond}{g_tag}→', ION_COLORS['y']))
                 # z ions (orange) - shorter vertical
                 if c_bond in coverage['z']:
                     y_bot_z = 0.25
                     lw = 2.5 if c_bond in glycan_ions['z'] else 1.5
                     ax_seq.plot([x_base, x_base], [0.5, y_bot_z], color=ION_COLORS['z'], linewidth=lw)
                     ax_seq.plot([x_base, x_base + 0.15], [y_bot_z, y_bot_z - 0.10], color=ION_COLORS['z'], linewidth=lw)
-                    if c_bond in glycan_ions['z']:
-                        g_tag = self._get_ion_glycan_label('z', c_bond)
-                        _arrow_labels_bot.append((x_base + 0.2, y_bot_z - 0.20,
-                                                  f'z{c_bond}{g_tag}→', ION_COLORS['z']))
+                    g_tag = self._get_ion_glycan_label('z', c_bond) if c_bond in glycan_ions['z'] else ''
+                    _arrow_labels_bot.append((x_base + 0.2, y_bot_z - 0.20,
+                                              f'z{c_bond}{g_tag}→', ION_COLORS['z']))
 
         # Deduplicate arrow labels: when consecutive ions of the SAME TYPE carry
         # the same glycan tag, keep only the first label (arrows still drawn).
@@ -1025,6 +1024,20 @@ class SpectrumAnnotator:
                 sim_placed.append((x, y_sim, est_w))
             if sim_placed:
                 y_top = max(y_top, max(p[1] for p in sim_placed) + 0.3)
+        if _arrow_labels_bot:
+            # Same re-simulation downward: bottom labels exist on every covered y/z bond now,
+            # and a staggered stack must not fall off the axis.
+            _arrow_labels_bot.sort(key=lambda l: l[0])
+            sim_placed = []
+            for x, base_y, text, color in _arrow_labels_bot:
+                y_sim = base_y
+                est_w = len(text) * char_width
+                for px, py, pw in sim_placed:
+                    if abs(x - px) < max(est_w, pw) * 0.85:
+                        y_sim = min(y_sim, py - stagger_step)
+                sim_placed.append((x, y_sim, est_w))
+            if sim_placed:
+                y_bot = min(y_bot, min(p[1] for p in sim_placed) - 0.3)
         ax_seq.set_ylim(y_bot, y_top)
 
         if fig is not None and output_path:
