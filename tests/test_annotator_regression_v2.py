@@ -839,3 +839,41 @@ def test_a_supplied_coverage_overrides_the_annotators_own():
     texts = [t.get_text() for t in fig.axes[0].texts]
     got_y = {int(m.group(1)) for t in texts for m in [re.fullmatch(r'y(\d+)→', t)] if m}
     assert got_y == want["y"], f"labels {got_y} do not follow the supplied coverage {want['y']}"
+
+
+# --- resolve_peak_labels(): extracted 2026-08-23, and it must stay a pure extraction ------------
+def test_the_resolver_is_what_plot_draws():
+    """Same fixture, plot() before/after the extraction must label identically -- asserted by
+    reproducing plot()'s labels through the public resolver."""
+    import matplotlib
+    matplotlib.use("Agg")
+    from spectrum_annotator_ddzby import resolve_peak_labels
+    a = _butterfly_annotator()
+    fig = a.plot()
+    ax_spec = fig.axes[2] if len(fig.axes) > 2 else fig.axes[-1]
+    drawn = {t.get_text() for ax in fig.axes for t in ax.texts}
+    base = max(a.exp_intensity)
+    cand = [(i.exp_mz, i.exp_intensity / base * 100, a._format_annotation(i, short=True))
+            for i in a.peak_annotations.values() if i.ion_type != 'precursor'
+            and getattr(i, 'isotope_flag', None) != 'suspicious_low_M1']
+    resolved = {t for _mz, _rel, t, _rot in resolve_peak_labels(cand)}
+    assert resolved, "the fixture produced no labels -- vacuous"
+    assert resolved <= drawn, (
+        f"plot() did not draw {resolved - drawn} -- the extraction has drifted from plot()")
+
+
+def test_the_resolver_drops_the_weaker_of_two_colliding_labels():
+    from spectrum_annotator_ddzby import resolve_peak_labels
+    out = resolve_peak_labels([(500.0, 50.0, "y5"), (505.0, 46.0, "y6")])
+    assert [t for _m, _r, t, _rot in out] == ["y5"], \
+        "two labels inside the 15 m/z x 8 % window must collapse to the stronger one"
+    # outside the window both survive
+    out = resolve_peak_labels([(500.0, 50.0, "y5"), (520.0, 46.0, "y6")])
+    assert len(out) == 2
+
+
+def test_the_resolver_rotates_long_labels_and_respects_the_floor():
+    from spectrum_annotator_ddzby import resolve_peak_labels
+    out = resolve_peak_labels([(300.0, 40.0, "y12++"), (900.0, 0.5, "y9")])
+    assert out == [(300.0, 40.0, "y12++", 90)], \
+        "long labels rotate 90; sub-floor labels are dropped"

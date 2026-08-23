@@ -67,6 +67,44 @@ ION_COLORS_NL = {
 # SPECTRUM ANNOTATOR CLASS
 # =============================================================================
 
+def resolve_peak_labels(labels,
+                        max_labels: int = 50,
+                        intensity_threshold_pct: float = 1.0,
+                        mz_window: float = 15.0,
+                        intensity_window_pct: float = 8.0):
+    """The spectrum panel's peak-label placement, extracted from ``plot()`` 2026-08-23.
+
+    Greedy and intensity-descending: the strongest peak is placed first and overlap-blocks
+    weaker neighbours, never the other way around. A label inside another's exclusion window
+    (``mz_window`` m/z x ``intensity_window_pct`` %-RI) is DROPPED, not moved; labels longer
+    than 4 characters rotate 90 degrees. This is the whole overlap policy of the annotated
+    spectrum -- public so a caller rendering a spectrum through its own plotting stack (a
+    journal-styled panel, for instance) can let THIS algorithm choose which labels survive
+    instead of re-inventing a collision rule.
+
+    Args:
+        labels: iterable of ``(mz, rel_intensity_pct, text)``.
+        max_labels / intensity_threshold_pct: the same budget and floor ``plot()`` takes.
+        mz_window / intensity_window_pct: the exclusion rectangle (defaults are the deployed
+            15 m/z x 8 %).
+
+    Returns:
+        ``[(mz, rel_intensity_pct, text, rotation_deg), ...]`` for the survivors, in placement
+        order (strongest first).
+    """
+    kept = []
+    placed = []
+    for mz, rel, text in sorted(labels, key=lambda l: -l[1]):
+        if rel < intensity_threshold_pct or len(kept) >= max_labels:
+            continue
+        if any(abs(mz - px) < mz_window and abs(rel - py) < intensity_window_pct
+               for px, py in placed):
+            continue
+        kept.append((float(mz), float(rel), text, 90 if len(text) > 4 else 0))
+        placed.append((mz, rel))
+    return kept
+
+
 class SpectrumAnnotator:
     """
     Creates annotated spectrum plots for glycopeptides.
@@ -1253,16 +1291,12 @@ class SpectrumAnnotator:
         # Step B: label only one ion per peak, using the Patch-D-resolved
         # winner in self.peak_annotations. This is where isotope_flag takes
         # effect on what the reader actually sees.
-        labels_added = 0
-        labeled_positions = []
-        # Sort labels by intensity descending so the strongest peak always
-        # gets labeled first and overlap-blocks weaker neighbors, not the
-        # other way around.
-        label_ions = sorted(
-            self.peak_annotations.values(),
-            key=lambda ion: -ion.exp_intensity,
-        )
-        for ion in label_ions:
+        # The geometric policy -- intensity order, budget, floor, the 15 m/z x 8 % exclusion,
+        # rotation -- lives in resolve_peak_labels() (extracted 2026-08-23, pure). This loop
+        # keeps only the ION-specific part: precursor/isotope filtering, colour, formatting.
+        cand = []
+        style = {}
+        for ion in self.peak_annotations.values():
             if ion.ion_type == 'precursor':
                 continue
             # Isotope flags are audit/priority metadata for centroided MS2,
@@ -1274,28 +1308,20 @@ class SpectrumAnnotator:
             if flag == 'suspicious_low_M1':
                 continue
             rel_int = ion.exp_intensity / base_peak * 100
-            if rel_int < intensity_threshold_pct or labels_added >= max_labels:
-                continue
-            color = self._get_ion_color(
+            label = self._format_annotation(ion, short=True)
+            cand.append((ion.exp_mz, rel_int, label))
+            style[(float(ion.exp_mz), label)] = self._get_ion_color(
                 ion,
                 bool(ion.neutral_loss and ion.neutral_loss != 'glyc_full'),
             )
-            # 15 m/z × 8 %-intensity overlap guard (same as old logic)
-            can_label = True
-            for pos in labeled_positions:
-                if abs(ion.exp_mz - pos[0]) < 15 and abs(rel_int - pos[1]) < 8:
-                    can_label = False
-                    break
-            if not can_label:
-                continue
-            label = self._format_annotation(ion, short=True)
-            ax_spec.annotate(label, (ion.exp_mz, rel_int),
+        for mz, rel_int, label, rot in resolve_peak_labels(
+                cand, max_labels=max_labels,
+                intensity_threshold_pct=intensity_threshold_pct):
+            ax_spec.annotate(label, (mz, rel_int),
                             textcoords="offset points", xytext=(0, 5),
                             ha='center', va='bottom', fontsize=FZ['peak'],
-                            fontfamily='Arial', color=color, fontweight='bold',
-                            rotation=90 if len(label) > 4 else 0)
-            labeled_positions.append((ion.exp_mz, rel_int))
-            labels_added += 1
+                            fontfamily='Arial', color=style[(mz, label)], fontweight='bold',
+                            rotation=rot)
 
         # 5% line only for HCD (trigger threshold), not for EThcD/ETD
         if self.activation_type == "HCD":
