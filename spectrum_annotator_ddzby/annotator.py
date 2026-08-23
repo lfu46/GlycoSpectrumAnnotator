@@ -821,7 +821,8 @@ class SpectrumAnnotator:
                                ax=None,
                                figsize: Tuple[float, float] = (4.0, 1.2),
                                fontsize: Optional[dict] = None,
-                               output_path: Optional[str] = None):
+                               output_path: Optional[str] = None,
+                               coverage: Optional[Dict[str, set]] = None):
         """The IPSA-style peptide coverage ladder — b/c marks above, y/z below — on its own.
 
         EXTRACTED FROM ``plot()`` 2026-08-23, unchanged. ``plot()`` now calls this for its section
@@ -844,6 +845,12 @@ class SpectrumAnnotator:
                 reach it before.
             output_path: save the figure as PDF. Ignored when ``ax`` was supplied, since the
                 figure then belongs to the caller.
+            coverage: override the covered-bond sets, ``{'b': {..}, 'c': set(), 'y': {..},
+                'z': set()}``. By default the ladder draws this annotator's OWN matching
+                (``_get_fragmentation_coverage()``: S/N-gated, neutral losses count). A caller
+                placing the ladder under a spectrum panel annotated by a DIFFERENT pipeline
+                passes that pipeline's covered bonds here, so the two stacked panels cannot
+                disagree about which ions exist. Missing keys are treated as empty.
 
         Returns:
             ``(fig, coverage)`` — ``fig`` is None when ``ax`` was supplied. ``coverage`` is the
@@ -867,8 +874,11 @@ class SpectrumAnnotator:
         # ylim will be adjusted after labels are placed
         ax_seq.axis('off')
 
-        # Get fragmentation coverage by ion type
-        coverage = self._get_fragmentation_coverage()
+        # Get fragmentation coverage by ion type -- the caller's set when supplied, else ours
+        if coverage is None:
+            coverage = self._get_fragmentation_coverage()
+        else:
+            coverage = {t: set(coverage.get(t) or ()) for t in ('b', 'c', 'y', 'z')}
         # Get glycan-containing (site-determining) ions
         glycan_ions = self._get_glycan_containing_ions()
 
@@ -986,25 +996,44 @@ class SpectrumAnnotator:
         _arrow_labels_top = _dedup_labels(_arrow_labels_top)
         _arrow_labels_bot = _dedup_labels(_arrow_labels_bot)
 
-        # Place arrow labels with stagger to avoid overlap
-        # Scale text width estimate based on peptide length (longer peptides = wider chars in data coords)
-        char_width = 0.06 * (len(self.peptide) + 1) / 14.0
-        stagger_step = 0.18
+        # Place arrow labels with stagger to avoid overlap.
+        #
+        # The extents are estimated in PHYSICAL units from the figure's real geometry and then
+        # converted to data coordinates. The previous constant (0.06 * (len+1) / 14) was a
+        # data-coordinate guess calibrated on the default 4.0 in figure: on a narrower figure it
+        # under-estimated label widths by the width ratio, the stagger never fired, and a dense
+        # ladder (every covered bond labelled, 2026-08-23) rendered its labels on top of each
+        # other. 0.62 em per character is Arial's average advance; 1.3 em is the line height.
+        _fig_ref = ax_seq.figure
+        _bbox = ax_seq.get_position()
+        _axes_w_in = max(_fig_ref.get_size_inches()[0] * _bbox.width, 1e-6)
+        _axes_h_in = max(_fig_ref.get_size_inches()[1] * _bbox.height, 1e-6)
+        _x_range = len(self.peptide) + 1.0
+        char_width = (FZ['frag'] * 0.62 / 72.0) / _axes_w_in * _x_range
+        # Vertical step between staggered rows, sized to the label's line height against the
+        # ladder's ~2.0-unit baseline y-range (the final ylim grows with the stack, which only
+        # makes the physical step conservative).
+        stagger_step = max(0.18, (FZ['frag'] * 1.3 / 72.0) / _axes_h_in * 2.0)
+
+        def _stagger_rows(labels_list, direction):
+            """Greedy ROW assignment: a label moves to the next row only while the row it is
+            trying holds an overlapping label. Comparing against every placed label regardless
+            of row (the previous behaviour) turned a dense ladder into an ever-deepening
+            staircase -- each label fleeing the one before it -- when two alternating rows hold
+            the same set comfortably."""
+            placed = []  # (x, y, est_width)
+            for x, base_y, text, color in sorted(labels_list, key=lambda l: l[0]):
+                est_width = len(text) * char_width
+                y = base_y
+                while any(abs(x - px) < max(est_width, pw) * 0.85
+                          and abs(y - py) < stagger_step * 0.5
+                          for px, py, pw in placed):
+                    y = y + stagger_step if direction == 'up' else y - stagger_step
+                placed.append((x, y, est_width))
+                yield x, y, text, color
 
         for labels_list, direction in [(_arrow_labels_top, 'up'), (_arrow_labels_bot, 'down')]:
-            labels_list.sort(key=lambda l: l[0])
-            placed = []  # (x, y, est_width)
-            for x, base_y, text, color in labels_list:
-                y = base_y
-                est_width = len(text) * char_width
-                # Check overlap with previously placed labels
-                for px, py, pw in placed:
-                    if abs(x - px) < max(est_width, pw) * 0.85:
-                        if direction == 'up':
-                            y = max(y, py + stagger_step)
-                        else:
-                            y = min(y, py - stagger_step)
-                placed.append((x, y, est_width))
+            for x, y, text, color in _stagger_rows(labels_list, direction):
                 ax_seq.text(x, y, text, fontsize=FZ['frag'], color=color,
                            fontweight='bold', fontfamily='Arial')
 
@@ -1012,32 +1041,15 @@ class SpectrumAnnotator:
         y_top = 1.5
         y_bot = -0.5
         if _arrow_labels_top:
-            # Re-simulate stagger to find max y
-            _arrow_labels_top.sort(key=lambda l: l[0])
-            sim_placed = []
-            for x, base_y, text, color in _arrow_labels_top:
-                y_sim = base_y
-                est_w = len(text) * char_width
-                for px, py, pw in sim_placed:
-                    if abs(x - px) < max(est_w, pw) * 0.85:
-                        y_sim = max(y_sim, py + stagger_step)
-                sim_placed.append((x, y_sim, est_w))
-            if sim_placed:
-                y_top = max(y_top, max(p[1] for p in sim_placed) + 0.3)
+            ys = [y for _x, y, _t, _c in _stagger_rows(_arrow_labels_top, 'up')]
+            if ys:
+                y_top = max(y_top, max(ys) + 0.3)
         if _arrow_labels_bot:
-            # Same re-simulation downward: bottom labels exist on every covered y/z bond now,
-            # and a staggered stack must not fall off the axis.
-            _arrow_labels_bot.sort(key=lambda l: l[0])
-            sim_placed = []
-            for x, base_y, text, color in _arrow_labels_bot:
-                y_sim = base_y
-                est_w = len(text) * char_width
-                for px, py, pw in sim_placed:
-                    if abs(x - px) < max(est_w, pw) * 0.85:
-                        y_sim = min(y_sim, py - stagger_step)
-                sim_placed.append((x, y_sim, est_w))
-            if sim_placed:
-                y_bot = min(y_bot, min(p[1] for p in sim_placed) - 0.3)
+            # Bottom labels exist on every covered y/z bond now, and a staggered stack must not
+            # fall off the axis.
+            ys = [y for _x, y, _t, _c in _stagger_rows(_arrow_labels_bot, 'down')]
+            if ys:
+                y_bot = min(y_bot, min(ys) - 0.3)
         ax_seq.set_ylim(y_bot, y_top)
 
         if fig is not None and output_path:

@@ -733,8 +733,12 @@ def _butterfly_annotator():
 
 
 def _axis_signature(ax):
+    # No ylim here since 2026-08-23: label stagger is computed from the figure's PHYSICAL
+    # geometry now, so the composed figure (plot()'s GridSpec row) and the standalone panel
+    # (its own figsize) legitimately stack labels -- and therefore set ylim -- differently.
+    # The extraction contract is content, not geometry: same artists, same x positions, same
+    # label texts.
     return (len(ax.lines), len(ax.texts),
-            tuple(round(v, 6) for v in ax.get_ylim()),
             tuple(sorted(round(float(l.get_xydata()[0][0]), 4) for l in ax.lines)),
             tuple(sorted(t.get_text() for t in ax.texts)))
 
@@ -819,3 +823,19 @@ def test_glycan_tags_still_join_their_labels():
     texts = [t.get_text() for t in fig.axes[0].texts]
     assert not any("+" in t for t in texts), (
         "the plain fixture grew a glycan tag from nowhere -- tagging is no longer conditional")
+
+
+def test_a_supplied_coverage_overrides_the_annotators_own():
+    """2026-08-23: a caller stacking the ladder under a spectrum annotated by a different
+    pipeline passes that pipeline's covered bonds, so the two panels cannot disagree."""
+    import re
+    import matplotlib
+    matplotlib.use("Agg")
+    a = _butterfly_annotator()
+    want = {"b": {2, 5}, "y": {1, 3, 7}}
+    fig, cov = a.plot_peptide_butterfly(coverage=want)
+    assert cov["b"] == want["b"] and cov["y"] == want["y"]
+    assert cov["c"] == set() and cov["z"] == set(), "missing keys must read as empty, not crash"
+    texts = [t.get_text() for t in fig.axes[0].texts]
+    got_y = {int(m.group(1)) for t in texts for m in [re.fullmatch(r'y(\d+)→', t)] if m}
+    assert got_y == want["y"], f"labels {got_y} do not follow the supplied coverage {want['y']}"
