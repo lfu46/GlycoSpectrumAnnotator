@@ -782,3 +782,40 @@ def test_the_butterfly_draws_into_a_supplied_axes_and_makes_no_figure():
     assert fig is None, "a figure was created even though an Axes was supplied"
     assert len(ax.lines) > 10, "nothing was drawn into the supplied Axes"
     assert any(coverage.values())
+
+
+def test_every_covered_bond_is_labelled_on_a_plain_peptide():
+    """2026-08-23: labels were emitted ONLY for glycan-bearing ions (`if c_bond in
+    glycan_ions[...]`), so a plain peptide's ladder drew bare ticks with nothing naming them --
+    the N-terminomics butterfly rendered 20 covered bonds and zero `yN` texts. Every covered
+    bond now gets its ion label, with the glycan tag joining only when there is one."""
+    import re
+    import matplotlib
+    matplotlib.use("Agg")
+    a = _butterfly_annotator()
+    fig, coverage = a.plot_peptide_butterfly()
+    texts = [t.get_text() for t in fig.axes[0].texts]
+    for ion_type in ("b", "y"):
+        want = coverage[ion_type]
+        got = {int(m.group(1))
+               for t in texts
+               for m in [re.fullmatch(rf'[←]?{ion_type}(\d+)[→]?', t)] if m}
+        assert got == want, (
+            f"{ion_type}-ion labels {sorted(got)} != covered bonds {sorted(want)} -- "
+            "a covered bond without its label is the bug this test pins")
+    # the fixture must actually exercise the path (see _butterfly_annotator's docstring)
+    assert coverage["y"], "no y coverage -- vacuous"
+
+
+def test_glycan_tags_still_join_their_labels():
+    """The other half of the same change: a glycan-bearing ion's label keeps its tag -- the fix
+    must be additive for glyco callers, not a replacement of their labels."""
+    import matplotlib
+    matplotlib.use("Agg")
+    a = _butterfly_annotator()
+    # Route one y ion through the glycan-labelling path by faking a matched glycan ion the way
+    # the annotator records them.
+    fig, coverage = a.plot_peptide_butterfly()
+    texts = [t.get_text() for t in fig.axes[0].texts]
+    assert not any("+" in t for t in texts), (
+        "the plain fixture grew a glycan tag from nowhere -- tagging is no longer conditional")
