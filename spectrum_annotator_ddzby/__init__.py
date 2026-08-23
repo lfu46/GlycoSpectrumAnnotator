@@ -33,6 +33,7 @@ from .fragment_calculator import (
 
 from .annotator import (
     SpectrumAnnotator,
+    resolve_peak_labels,
     annotate_spectra_batch,
     ION_COLORS,
 )
@@ -80,6 +81,7 @@ __all__ = [
     # Classes
     "FragmentCalculator",
     "SpectrumAnnotator",
+    "resolve_peak_labels",
     "TheoreticalIon",
     "MatchedIon",
     "FalseMatchRate",
