@@ -817,81 +817,48 @@ class SpectrumAnnotator:
 
         return glycan_ions
 
-    def plot(self,
-             figsize: Tuple[float, float] = (6, 4),
-             output_path: Optional[str] = None,
-             show_error_plot: bool = True,
-             intensity_threshold_pct: float = 1.0,
-             max_labels: int = 50,
-             compact: bool = True,
-             mini: bool = False) -> plt.Figure:
-        """
-        Create annotated spectrum plot.
+    def plot_peptide_butterfly(self,
+                               ax=None,
+                               figsize: Tuple[float, float] = (4.0, 1.2),
+                               fontsize: Optional[dict] = None,
+                               output_path: Optional[str] = None):
+        """The IPSA-style peptide coverage ladder — b/c marks above, y/z below — on its own.
+
+        EXTRACTED FROM ``plot()`` 2026-08-23, unchanged. ``plot()`` now calls this for its section
+        1, so there is one implementation and the composed figure cannot drift from the standalone
+        panel. It was ~170 lines inline and reachable only by rendering the whole 3-4 row figure.
+
+        WHY IT IS PUBLIC AND TAKES AN ``ax``. Callers wanting only the coverage ladder — a figure
+        panel, a review sheet, a slide — had to call ``plot()`` and discard three quarters of what
+        it returned, inheriting its GridSpec, its font scheme and its ``tight_layout()``. Those are
+        reasonable defaults for a review PDF and wrong for a manuscript panel with its own
+        standard. Passing ``ax`` draws into someone else's figure and returns it untouched
+        otherwise.
 
         Args:
-            figsize: Figure size (width, height)
-            output_path: Path to save PDF (optional)
-            show_error_plot: Whether to show mass error plot
-            intensity_threshold_pct: Minimum intensity (% base peak) to label
-            max_labels: Maximum number of labels to show
+            ax: draw into this Axes. When None a new figure of ``figsize`` is created and returned.
+            figsize: only used when ``ax`` is None.
+            fontsize: override the two sizes this panel uses, ``{'seq': pt, 'frag': pt}``. Defaults
+                to ``plot(compact=True)``'s values (7 and 5). A caller with a font floor above 5 pt
+                — the Nature-family 7 pt minimum, for instance — needs this; there was no way to
+                reach it before.
+            output_path: save the figure as PDF. Ignored when ``ax`` was supplied, since the
+                figure then belongs to the caller.
 
         Returns:
-            matplotlib Figure object
+            ``(fig, coverage)`` — ``fig`` is None when ``ax`` was supplied. ``coverage`` is the
+            per-ion-type covered-position dict, which the caller needs for a coverage statistic and
+            which ``plot()`` goes on to use for its info panel.
         """
-        # Set Arial as default font for all text
-        plt.rcParams['font.family'] = 'Arial'
-        plt.rcParams['font.sans-serif'] = ['Arial']
-        # Font-size scheme. compact=True targets small publication panels
-        # (~6x4 in, 7-8 pt main text; dense peak/fragment labels a touch
-        # smaller so they still fit). Default preserves the 12x8 hierarchy.
-        if mini:
-            FZ = dict(seq=5, frag=4, info1=6, info2=5, peak=5, thresh=4,
-                      axis=6, tick=5, legend=5, symleg=5, title=[7, 6, 6, 6],
-                      suptitle=7, subfile=6)
-        elif compact:
-            FZ = dict(seq=7, frag=5, info1=8, info2=7, peak=6, thresh=5,
-                      axis=8, tick=7, legend=6, symleg=6, title=[8, 7, 7, 7],
-                      suptitle=8, subfile=7)
-        else:
-            FZ = dict(seq=8, frag=5, info1=9, info2=8, peak=7, thresh=6,
-                      axis=9, tick=8, legend=7, symleg=6, title=[12, 10, 10, 10],
-                      suptitle=10, subfile=8)
+        FZ = dict(seq=7, frag=5)
+        if fontsize:
+            FZ.update(fontsize)
 
-        # Normalize intensities to % base peak.
-        # IMPORTANT: the PLOT uses the RAW spectrum so full isotope envelopes
-        # of matched ions remain visible — even ones that aggressive
-        # deisotoping collapsed. Matching itself was done on the deisotoped
-        # self.exp_mz/self.exp_intensity to avoid false matches at isotope
-        # m/z positions. The base peak here is the raw base peak so relative
-        # intensities read normally.
-        base_peak = float(np.max(self.raw_intensity))
-        plot_mz = self.raw_mz
-        plot_intensity = self.raw_intensity
-        rel_intensity = plot_intensity / base_peak * 100
-
-        # Set up figure
-        seq_height = 1.2
-        if mini:
+        fig = None
+        if ax is None:
             fig = plt.figure(figsize=figsize)
-            gs = GridSpec(2, 1, height_ratios=[seq_height, 3.4], hspace=0.04)
-            ax_seq = fig.add_subplot(gs[0])
-            ax_spec = fig.add_subplot(gs[1])
-            ax_info = None
-            ax_error = None
-        elif show_error_plot:
-            fig = plt.figure(figsize=figsize)
-            gs = GridSpec(4, 1, height_ratios=[seq_height, 0.5, 3, 1], hspace=0.05)
-            ax_seq = fig.add_subplot(gs[0])
-            ax_info = fig.add_subplot(gs[1])
-            ax_spec = fig.add_subplot(gs[2])
-            ax_error = fig.add_subplot(gs[3], sharex=ax_spec)
-        else:
-            fig = plt.figure(figsize=(figsize[0], figsize[1] * 0.8))
-            gs = GridSpec(3, 1, height_ratios=[seq_height, 0.5, 3], hspace=0.05)
-            ax_seq = fig.add_subplot(gs[0])
-            ax_info = fig.add_subplot(gs[1])
-            ax_spec = fig.add_subplot(gs[2])
-            ax_error = None
+            ax = fig.add_subplot(111)
+        ax_seq = ax
 
         # =====================================================================
         # 1. Peptide Sequence with Fragmentation Sites (IPSA-style)
@@ -1059,6 +1026,94 @@ class SpectrumAnnotator:
             if sim_placed:
                 y_top = max(y_top, max(p[1] for p in sim_placed) + 0.3)
         ax_seq.set_ylim(y_bot, y_top)
+
+        if fig is not None and output_path:
+            fig.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+        return fig, coverage
+
+    def plot(self,
+             figsize: Tuple[float, float] = (6, 4),
+             output_path: Optional[str] = None,
+             show_error_plot: bool = True,
+             intensity_threshold_pct: float = 1.0,
+             max_labels: int = 50,
+             compact: bool = True,
+             mini: bool = False) -> plt.Figure:
+        """
+        Create annotated spectrum plot.
+
+        Args:
+            figsize: Figure size (width, height)
+            output_path: Path to save PDF (optional)
+            show_error_plot: Whether to show mass error plot
+            intensity_threshold_pct: Minimum intensity (% base peak) to label
+            max_labels: Maximum number of labels to show
+
+        Returns:
+            matplotlib Figure object
+        """
+        # Set Arial as default font for all text
+        plt.rcParams['font.family'] = 'Arial'
+        plt.rcParams['font.sans-serif'] = ['Arial']
+        # Font-size scheme. compact=True targets small publication panels
+        # (~6x4 in, 7-8 pt main text; dense peak/fragment labels a touch
+        # smaller so they still fit). Default preserves the 12x8 hierarchy.
+        if mini:
+            FZ = dict(seq=5, frag=4, info1=6, info2=5, peak=5, thresh=4,
+                      axis=6, tick=5, legend=5, symleg=5, title=[7, 6, 6, 6],
+                      suptitle=7, subfile=6)
+        elif compact:
+            FZ = dict(seq=7, frag=5, info1=8, info2=7, peak=6, thresh=5,
+                      axis=8, tick=7, legend=6, symleg=6, title=[8, 7, 7, 7],
+                      suptitle=8, subfile=7)
+        else:
+            FZ = dict(seq=8, frag=5, info1=9, info2=8, peak=7, thresh=6,
+                      axis=9, tick=8, legend=7, symleg=6, title=[12, 10, 10, 10],
+                      suptitle=10, subfile=8)
+
+        # Normalize intensities to % base peak.
+        # IMPORTANT: the PLOT uses the RAW spectrum so full isotope envelopes
+        # of matched ions remain visible — even ones that aggressive
+        # deisotoping collapsed. Matching itself was done on the deisotoped
+        # self.exp_mz/self.exp_intensity to avoid false matches at isotope
+        # m/z positions. The base peak here is the raw base peak so relative
+        # intensities read normally.
+        base_peak = float(np.max(self.raw_intensity))
+        plot_mz = self.raw_mz
+        plot_intensity = self.raw_intensity
+        rel_intensity = plot_intensity / base_peak * 100
+
+        # Set up figure
+        seq_height = 1.2
+        if mini:
+            fig = plt.figure(figsize=figsize)
+            gs = GridSpec(2, 1, height_ratios=[seq_height, 3.4], hspace=0.04)
+            ax_seq = fig.add_subplot(gs[0])
+            ax_spec = fig.add_subplot(gs[1])
+            ax_info = None
+            ax_error = None
+        elif show_error_plot:
+            fig = plt.figure(figsize=figsize)
+            gs = GridSpec(4, 1, height_ratios=[seq_height, 0.5, 3, 1], hspace=0.05)
+            ax_seq = fig.add_subplot(gs[0])
+            ax_info = fig.add_subplot(gs[1])
+            ax_spec = fig.add_subplot(gs[2])
+            ax_error = fig.add_subplot(gs[3], sharex=ax_spec)
+        else:
+            fig = plt.figure(figsize=(figsize[0], figsize[1] * 0.8))
+            gs = GridSpec(3, 1, height_ratios=[seq_height, 0.5, 3], hspace=0.05)
+            ax_seq = fig.add_subplot(gs[0])
+            ax_info = fig.add_subplot(gs[1])
+            ax_spec = fig.add_subplot(gs[2])
+            ax_error = None
+
+        # =====================================================================
+        # 1. Peptide Sequence with Fragmentation Sites (IPSA-style)
+        # =====================================================================
+        # Extracted to plot_peptide_butterfly() 2026-08-23 so the ladder is reachable on its own.
+        # `coverage` is returned because the info panel below needs it.
+        _, coverage = self.plot_peptide_butterfly(
+            ax=ax_seq, fontsize={'seq': FZ['seq'], 'frag': FZ['frag']})
 
         # =====================================================================
         # 2. Info Panel (with False Match Rate)

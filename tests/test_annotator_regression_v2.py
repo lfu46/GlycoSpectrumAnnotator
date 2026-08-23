@@ -688,3 +688,97 @@ def test_audit_list_populated():
     assert len(kept_y_intact) >= 1, (
         "Y(intact) at precursor_mz must be preserved by is_intact_y check"
     )
+
+
+# --- plot_peptide_butterfly(): extracted 2026-08-23, and it must stay a pure extraction ---------
+# The coverage ladder was ~170 lines inline in plot() and reachable only by rendering the whole
+# 3-4 row figure. It is now a public method that plot() calls, so a caller wanting only the ladder
+# -- a manuscript panel with its own font floor and its own page size -- can have it without
+# inheriting plot()'s GridSpec, its font scheme or its tight_layout().
+#
+# THE RISK OF THAT REFACTOR is that the composed figure and the standalone panel drift apart. These
+# two tests are the guard: same artists, same geometry, on data that actually produces ladder marks.
+
+def _butterfly_annotator():
+    """A peptide + spectrum that genuinely matches, so the ladder-drawing path is exercised.
+
+    Synthetic, but built FROM the theoretical ions rather than random -- an earlier version of this
+    test used pure noise, matched nothing, drew zero ladder marks, and compared two empty axes while
+    reporting success. The `len(lines) > 10` assertion below exists because of that.
+
+    THE NOISE FLOOR IS NOT DECORATION. A spectrum of nothing but the theoretical ions, all at one
+    intensity, also draws zero marks: the annotator estimates S/N from the intensity distribution,
+    and a flat distribution gives it nothing to call signal. 600 low random peaks under 40 strong
+    ones is what makes the fixture behave like a spectrum.
+    """
+    import numpy as np
+    from spectrum_annotator_ddzby import FragmentCalculator
+
+    peptide = "PGGLLLGDVAPNFEANTTVGR"
+    mods = [{'position': 0, 'residue': 'N-term', 'mass': 240.0859}]
+    calc = FragmentCalculator(peptide, mods, precursor_charge=2, max_fragment_charge=2)
+    ions = [i for i in calc.get_hcd_ions_flat() if i.ion_type in ("b", "y")]
+
+    rng = np.random.default_rng(1)                       # seeded: the fixture must not vary
+    sig_mz = np.array([i.mz for i in ions], dtype=float)
+    sig_in = np.full(sig_mz.shape, 5000.0)
+    noise_mz = rng.uniform(120, 2100, 600)
+    noise_in = rng.uniform(1, 40, 600)
+    mz = np.concatenate([sig_mz, noise_mz])
+    inten = np.concatenate([sig_in, noise_in])
+    order = np.argsort(mz)
+    return SpectrumAnnotator(peptide=peptide, modifications=mods, precursor_charge=2,
+                             precursor_mz=1169.5916, exp_mz=mz[order], exp_intensity=inten[order],
+                             activation_type="HCD")
+
+
+def _axis_signature(ax):
+    return (len(ax.lines), len(ax.texts),
+            tuple(round(v, 6) for v in ax.get_ylim()),
+            tuple(sorted(round(float(l.get_xydata()[0][0]), 4) for l in ax.lines)),
+            tuple(sorted(t.get_text() for t in ax.texts)))
+
+
+def test_the_standalone_butterfly_matches_the_one_plot_draws():
+    """THE extraction guard. Same artists, same positions, same labels, same ylim."""
+    import matplotlib
+    matplotlib.use("Agg")
+    a = _butterfly_annotator()
+    composed = a.plot().axes[0]
+    standalone, coverage = a.plot_peptide_butterfly()
+    assert _axis_signature(composed) == _axis_signature(standalone.axes[0]), (
+        "plot()'s sequence row and plot_peptide_butterfly() have drifted apart -- the extraction "
+        "is no longer pure")
+    # NEGATIVE-shaped: a comparison of two EMPTY axes would pass the assertion above and prove
+    # nothing. That is not hypothetical -- it is what the first version of this test did.
+    assert len(composed.lines) > 10, (
+        f"only {len(composed.lines)} ladder marks drawn; this fixture is not exercising the "
+        "coverage path and the equality above is vacuous")
+    assert any(coverage.values()), "no ion type covered -- same problem"
+
+
+def test_the_butterfly_font_sizes_can_be_raised():
+    """The reason the method is public: plot()'s `frag` label is fixed at 5 pt, under the 7 pt
+    floor several journals set, with no parameter to reach it."""
+    import matplotlib
+    matplotlib.use("Agg")
+    a = _butterfly_annotator()
+    default, _ = a.plot_peptide_butterfly()
+    raised, _ = a.plot_peptide_butterfly(fontsize={'seq': 9, 'frag': 8})
+    d = {round(t.get_fontsize(), 1) for t in default.axes[0].texts}
+    r = {round(t.get_fontsize(), 1) for t in raised.axes[0].texts}
+    assert d != r, "fontsize= did not reach the text -- the override is dead"
+    assert max(r) > max(d), f"raised sizes {sorted(r)} are not above the defaults {sorted(d)}"
+
+
+def test_the_butterfly_draws_into_a_supplied_axes_and_makes_no_figure():
+    """The other reason it is public: embedding it in a caller's own multi-panel figure."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    a = _butterfly_annotator()
+    host, ax = plt.subplots(figsize=(3, 1))
+    fig, coverage = a.plot_peptide_butterfly(ax=ax)
+    assert fig is None, "a figure was created even though an Axes was supplied"
+    assert len(ax.lines) > 10, "nothing was drawn into the supplied Axes"
+    assert any(coverage.values())
