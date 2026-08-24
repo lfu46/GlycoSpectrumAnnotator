@@ -861,7 +861,8 @@ class SpectrumAnnotator:
                                fontsize: Optional[dict] = None,
                                output_path: Optional[str] = None,
                                coverage: Optional[Dict[str, set]] = None,
-                               arrows: bool = True):
+                               arrows: bool = True,
+                               tick_linewidth: float = 1.5):
         """The IPSA-style peptide coverage ladder — b/c marks above, y/z below — on its own.
 
         EXTRACTED FROM ``plot()`` 2026-08-23, unchanged. ``plot()`` now calls this for its section
@@ -895,6 +896,10 @@ class SpectrumAnnotator:
                 only the glyph — plain ``b5`` / ``y3`` — while the tick marks, which carry the
                 actual coverage, are untouched. Added 2026-08-24 for the N-terminomics
                 Figure 1A candidate review set.
+            tick_linewidth: base linewidth of the non-glycan fragmentation tick marks
+                (default 1.5, the historical value). Glycan-carrying ticks stay at 2.5 so the
+                site-determining emphasis survives a thinner base. Added 2026-08-24, same
+                caller as ``arrows``.
 
         Returns:
             ``(fig, coverage)`` — ``fig`` is None when ``ax`` was supplied. ``coverage`` is the
@@ -970,7 +975,7 @@ class SpectrumAnnotator:
                 # b ions (blue) - longer vertical
                 if bond_pos in coverage['b']:
                     y_top_b = 0.9
-                    lw = 2.5 if bond_pos in glycan_ions['b'] else 1.5
+                    lw = 2.5 if bond_pos in glycan_ions['b'] else tick_linewidth
                     ax_seq.plot([x_base, x_base], [0.5, y_top_b], color=ION_COLORS['b'], linewidth=lw)
                     ax_seq.plot([x_base, x_base - 0.15], [y_top_b, y_top_b + 0.10], color=ION_COLORS['b'], linewidth=lw)
                     # Every covered bond gets its ion label; the glycan tag joins it only when
@@ -982,7 +987,7 @@ class SpectrumAnnotator:
                 # c ions (green) - shorter vertical
                 if bond_pos in coverage['c']:
                     y_top_c = 0.75
-                    lw = 2.5 if bond_pos in glycan_ions['c'] else 1.5
+                    lw = 2.5 if bond_pos in glycan_ions['c'] else tick_linewidth
                     ax_seq.plot([x_base, x_base], [0.5, y_top_c], color=ION_COLORS['c'], linewidth=lw)
                     ax_seq.plot([x_base, x_base - 0.15], [y_top_c, y_top_c + 0.10], color=ION_COLORS['c'], linewidth=lw)
                     g_tag = self._get_ion_glycan_label('c', bond_pos) if bond_pos in glycan_ions['c'] else ''
@@ -993,7 +998,7 @@ class SpectrumAnnotator:
                 # y ions (red) - longer vertical
                 if c_bond in coverage['y']:
                     y_bot_y = 0.1
-                    lw = 2.5 if c_bond in glycan_ions['y'] else 1.5
+                    lw = 2.5 if c_bond in glycan_ions['y'] else tick_linewidth
                     ax_seq.plot([x_base, x_base], [0.5, y_bot_y], color=ION_COLORS['y'], linewidth=lw)
                     ax_seq.plot([x_base, x_base + 0.15], [y_bot_y, y_bot_y - 0.10], color=ION_COLORS['y'], linewidth=lw)
                     g_tag = self._get_ion_glycan_label('y', c_bond) if c_bond in glycan_ions['y'] else ''
@@ -1002,7 +1007,7 @@ class SpectrumAnnotator:
                 # z ions (orange) - shorter vertical
                 if c_bond in coverage['z']:
                     y_bot_z = 0.25
-                    lw = 2.5 if c_bond in glycan_ions['z'] else 1.5
+                    lw = 2.5 if c_bond in glycan_ions['z'] else tick_linewidth
                     ax_seq.plot([x_base, x_base], [0.5, y_bot_z], color=ION_COLORS['z'], linewidth=lw)
                     ax_seq.plot([x_base, x_base + 0.15], [y_bot_z, y_bot_z - 0.10], color=ION_COLORS['z'], linewidth=lw)
                     g_tag = self._get_ion_glycan_label('z', c_bond) if c_bond in glycan_ions['z'] else ''
