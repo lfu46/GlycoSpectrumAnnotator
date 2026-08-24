@@ -860,7 +860,8 @@ class SpectrumAnnotator:
                                figsize: Tuple[float, float] = (4.0, 1.2),
                                fontsize: Optional[dict] = None,
                                output_path: Optional[str] = None,
-                               coverage: Optional[Dict[str, set]] = None):
+                               coverage: Optional[Dict[str, set]] = None,
+                               arrows: bool = True):
         """The IPSA-style peptide coverage ladder — b/c marks above, y/z below — on its own.
 
         EXTRACTED FROM ``plot()`` 2026-08-23, unchanged. ``plot()`` now calls this for its section
@@ -889,6 +890,11 @@ class SpectrumAnnotator:
                 placing the ladder under a spectrum panel annotated by a DIFFERENT pipeline
                 passes that pipeline's covered bonds here, so the two stacked panels cannot
                 disagree about which ions exist. Missing keys are treated as empty.
+            arrows: draw the label's arrow glyph (``←b5`` / ``y3→``). On a dense ladder the
+                arrows are what makes adjacent labels collide (``y16→y14→``); ``False`` drops
+                only the glyph — plain ``b5`` / ``y3`` — while the tick marks, which carry the
+                actual coverage, are untouched. Added 2026-08-24 for the N-terminomics
+                Figure 1A candidate review set.
 
         Returns:
             ``(fig, coverage)`` — ``fig`` is None when ``ax`` was supplied. ``coverage`` is the
@@ -924,6 +930,10 @@ class SpectrumAnnotator:
         # Collect arrow labels for stagger placement
         _arrow_labels_top = []   # (x, base_y, text, color) for N-terminal (b,c)
         _arrow_labels_bot = []   # (x, base_y, text, color) for C-terminal (y,z)
+        # arrows=False: no glyph, and the top labels shift right so a plain 'b5' still sits by
+        # its tick (the -0.6 offset was sized for the arrowhead reaching toward the mark).
+        _arr_l, _arr_r = ('←', '→') if arrows else ('', '')
+        _top_dx = -0.6 if arrows else -0.35
 
         for i, aa in enumerate(self.peptide):
             pos = i + 1  # 1-based
@@ -967,8 +977,8 @@ class SpectrumAnnotator:
                     # the ion carries one. (Labels were glycan-only before, which left a plain
                     # peptide's ladder as bare ticks with nothing naming them.)
                     g_tag = self._get_ion_glycan_label('b', bond_pos) if bond_pos in glycan_ions['b'] else ''
-                    _arrow_labels_top.append((x_base - 0.6, y_top_b + 0.25,
-                                              f'←b{bond_pos}{g_tag}', ION_COLORS['b']))
+                    _arrow_labels_top.append((x_base + _top_dx, y_top_b + 0.25,
+                                              f'{_arr_l}b{bond_pos}{g_tag}', ION_COLORS['b']))
                 # c ions (green) - shorter vertical
                 if bond_pos in coverage['c']:
                     y_top_c = 0.75
@@ -976,8 +986,8 @@ class SpectrumAnnotator:
                     ax_seq.plot([x_base, x_base], [0.5, y_top_c], color=ION_COLORS['c'], linewidth=lw)
                     ax_seq.plot([x_base, x_base - 0.15], [y_top_c, y_top_c + 0.10], color=ION_COLORS['c'], linewidth=lw)
                     g_tag = self._get_ion_glycan_label('c', bond_pos) if bond_pos in glycan_ions['c'] else ''
-                    _arrow_labels_top.append((x_base - 0.6, y_top_c + 0.15,
-                                              f'←c{bond_pos}{g_tag}', ION_COLORS['c']))
+                    _arrow_labels_top.append((x_base + _top_dx, y_top_c + 0.15,
+                                              f'{_arr_l}c{bond_pos}{g_tag}', ION_COLORS['c']))
 
                 # C-terminal ions (y/z) - vertical from middle down, then diagonal down-RIGHT
                 # y ions (red) - longer vertical
@@ -988,7 +998,7 @@ class SpectrumAnnotator:
                     ax_seq.plot([x_base, x_base + 0.15], [y_bot_y, y_bot_y - 0.10], color=ION_COLORS['y'], linewidth=lw)
                     g_tag = self._get_ion_glycan_label('y', c_bond) if c_bond in glycan_ions['y'] else ''
                     _arrow_labels_bot.append((x_base + 0.2, y_bot_y - 0.30,
-                                              f'y{c_bond}{g_tag}→', ION_COLORS['y']))
+                                              f'y{c_bond}{g_tag}{_arr_r}', ION_COLORS['y']))
                 # z ions (orange) - shorter vertical
                 if c_bond in coverage['z']:
                     y_bot_z = 0.25
@@ -997,7 +1007,7 @@ class SpectrumAnnotator:
                     ax_seq.plot([x_base, x_base + 0.15], [y_bot_z, y_bot_z - 0.10], color=ION_COLORS['z'], linewidth=lw)
                     g_tag = self._get_ion_glycan_label('z', c_bond) if c_bond in glycan_ions['z'] else ''
                     _arrow_labels_bot.append((x_base + 0.2, y_bot_z - 0.20,
-                                              f'z{c_bond}{g_tag}→', ION_COLORS['z']))
+                                              f'z{c_bond}{g_tag}{_arr_r}', ION_COLORS['z']))
 
         # Deduplicate arrow labels: when consecutive ions of the SAME TYPE carry
         # the same glycan tag, keep only the first label (arrows still drawn).
