@@ -86,3 +86,79 @@ def test_precursor_not_detected_is_graceful():
     res = plot_ms1_isolation_window(mz, inten, THEO + 50.0, CHARGE, 1.6,
                                     theoretical_mz=THEO + 50.0)
     assert res.precursor_found is False
+
+
+class TestMeasureMS1Window:
+    """The headless half, added 2026-09-10.
+
+    `measure_ms1_window` exists so per-PSM quality control can use the MS1
+    numbers without building a figure. `plot_ms1_isolation_window` now
+    delegates to it, so the drawn annotation and the QC column cannot drift.
+    """
+
+    def test_plotter_and_headless_agree(self):
+        from spectrum_annotator_ddzby import measure_ms1_window
+        mz, inten = _synthetic_envelope()
+        m = measure_ms1_window(mz, inten, THEO, CHARGE, 0.7, THEO)
+        r = plot_ms1_isolation_window(mz, inten, THEO, CHARGE, 0.7, THEO)
+        assert r.best_iso_n == m.best_iso_n
+        assert r.best_ppm == pytest.approx(m.best_ppm)
+        assert r.coiso_pct == pytest.approx(m.coiso_pct if m.coiso_pct is not None else 0.0)
+
+    def test_detects_off_by_one_monoisotope_selection(self):
+        """The measurement this whole module exists for.
+
+        An M+1 selection is not a cosmetic mass error. Several monosaccharide
+        swaps sit within ~0.02 Da of a neutron, so an off-by-one selection puts
+        a *different glycan composition* inside the search tolerance.
+        """
+        from spectrum_annotator_ddzby import measure_ms1_window
+        mz, inten = _synthetic_envelope()
+        m = measure_ms1_window(mz, inten, THEO + SPACING, CHARGE, 0.7, THEO)
+        assert m.best_iso_n == 1
+        assert abs(m.best_ppm) < 1.0
+
+        m2 = measure_ms1_window(mz, inten, THEO + 2 * SPACING, CHARGE, 0.7, THEO)
+        assert m2.best_iso_n == 2
+
+    def test_unmeasurable_coisolation_is_none_not_zero(self):
+        """A zero and an unmeasurable co-isolation mean opposite things.
+
+        0.0 says "clean precursor, reporter ions trustworthy". None says "no
+        envelope signal found, this was never checked". Collapsing the two
+        would let an unchecked PSM pass as a clean one.
+        """
+        from spectrum_annotator_ddzby import measure_ms1_window
+        m = measure_ms1_window(
+            np.array([500.0]), np.array([1.0]), THEO, CHARGE, 0.7, THEO
+        )
+        assert m.coiso_pct is None
+        assert m.precursor_found is False
+        assert m.envelope_intensity == 0.0
+
+    def test_clean_precursor_reports_zero_not_none(self):
+        from spectrum_annotator_ddzby import measure_ms1_window
+        mz = np.array([THEO + n * SPACING for n in range(4)])
+        inten = np.array([100.0, 90.0, 50.0, 20.0])
+        m = measure_ms1_window(mz, inten, THEO, CHARGE, 0.7, THEO)
+        assert m.coiso_pct == pytest.approx(0.0)
+        assert m.n_coiso_peaks == 0
+        assert m.precursor_found is True
+
+    def test_coisolation_ratio_is_window_restricted(self):
+        """Both numerator and denominator are limited to the isolation window.
+
+        The question being answered is "of the ions the quadrupole actually let
+        through, what fraction is not my precursor" -- which is what determines
+        reporter-ion contamination. Counting envelope peaks that fell outside
+        the window into the denominator understates co-isolation, and
+        understating is the dangerous direction.
+        """
+        from spectrum_annotator_ddzby import measure_ms1_window
+        # M+0 and M+1 fall inside a 0.7 Da window at charge 3; M+2 and M+3 do not.
+        mz = np.array([THEO + n * SPACING for n in range(4)] + [THEO + 0.25])
+        inten = np.array([100.0, 90.0, 50.0, 20.0, 19.0])
+        m = measure_ms1_window(mz, inten, THEO, CHARGE, 0.7, THEO)
+        assert m.envelope_intensity == pytest.approx(190.0)   # not 260.0
+        assert m.coiso_intensity == pytest.approx(19.0)
+        assert m.coiso_pct == pytest.approx(19.0 / 190.0 * 100.0)
