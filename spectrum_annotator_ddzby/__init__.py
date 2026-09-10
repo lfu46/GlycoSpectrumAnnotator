@@ -41,6 +41,8 @@ from .annotator import (
 from .ms1_window import (
     plot_ms1_isolation_window,
     MS1WindowResult,
+    measure_ms1_window,
+    MS1Measurement,
 )
 
 from .glycan_library import (
@@ -95,6 +97,8 @@ __all__ = [
     "annotate_spectra_batch",
     "plot_ms1_isolation_window",
     "MS1WindowResult",
+    "measure_ms1_window",
+    "MS1Measurement",
     "generate_y_ion_series",
     "generate_n_glycan_y_ions",
     "generate_n_glycan_remainders",

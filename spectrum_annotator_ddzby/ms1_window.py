@@ -47,6 +47,120 @@ class MS1WindowResult:
     precursor_found: bool
 
 
+@dataclass
+class MS1Measurement:
+    """Headless MS1 precursor measurements, with no figure attached.
+
+    Produced by :func:`measure_ms1_window`. Every field is either a real
+    measurement or ``None``; nothing is silently defaulted, because a zero
+    co-isolation and an unmeasurable co-isolation mean opposite things.
+
+    Attributes
+    ----------
+    best_ppm, best_iso_n
+        Precursor error at the best-matching isotope offset, and that offset.
+        ``best_iso_n > 0`` means the instrument isolated M+n rather than the
+        monoisotopic peak. This matters far beyond a cosmetic mass error: an
+        off-by-one selection lets the search engine reach a *different glycan
+        composition* within tolerance, because several monosaccharide swaps sit
+        within ~0.02 Da of a neutron (2 Fuc vs 1 NeuAc is 1.0204 Da against a
+        neutron's 1.0034 Da, a residual of 0.0170 Da -- absorbed by a 10 ppm
+        window above 1,705 Da).
+    coiso_pct
+        Co-isolated intensity as a percentage of the precursor envelope, or
+        ``None`` when it could not be measured (no envelope signal in the
+        window). Under isobaric labelling this is a *quantification* metric,
+        not only an identification one: co-isolated precursors contribute their
+        own reporter ions to the same MS2.
+    envelope_intensity, coiso_intensity, n_coiso_peaks
+        The raw sums behind ``coiso_pct``, so a caller can re-threshold.
+    precursor_found
+        Whether a peak was present at the isolation centre (within 0.02 Da).
+    """
+
+    best_ppm: float
+    best_iso_n: int
+    coiso_pct: Optional[float]
+    envelope_intensity: float
+    coiso_intensity: float
+    n_coiso_peaks: int
+    precursor_found: bool
+
+
+def measure_ms1_window(
+    ms1_mz,
+    ms1_intensity,
+    precursor_mz,
+    charge,
+    isolation_width,
+    theoretical_mz=None,
+    *,
+    max_isotope_offset=3,
+    envelope_tol_da=0.02,
+):
+    """Measure the MS1 isolation window around a precursor. No plotting.
+
+    This is the arithmetic half of :func:`plot_ms1_isolation_window`, split out
+    so the numbers can be used headlessly for per-PSM quality control. The
+    plotting function calls this and then draws; the two can therefore never
+    disagree.
+
+    Parameters are as for :func:`plot_ms1_isolation_window`. ``theoretical_mz``
+    defaults to ``precursor_mz``, which makes the ppm read ~0 and the isotope
+    check a no-op.
+
+    Returns
+    -------
+    MS1Measurement
+    """
+    mz = np.asarray(ms1_mz, dtype=float)
+    intensity = np.asarray(ms1_intensity, dtype=float)
+    if theoretical_mz is None:
+        theoretical_mz = precursor_mz
+    isotope_spacing = ISOTOPE_SPACING_DA / charge
+
+    # MIPS check: is the isolated peak the monoisotope, or M+1..M+n?
+    best_iso_n = 0
+    best_ppm = (precursor_mz - theoretical_mz) / theoretical_mz * 1e6
+    for iso_n in range(max_isotope_offset + 1):
+        corrected_mz = theoretical_mz + iso_n * isotope_spacing
+        ppm = (precursor_mz - corrected_mz) / corrected_mz * 1e6
+        if abs(ppm) < abs(best_ppm):
+            best_ppm = ppm
+            best_iso_n = iso_n
+
+    half_iso = isolation_width / 2.0
+    in_window = (mz >= precursor_mz - half_iso) & (mz <= precursor_mz + half_iso)
+
+    is_envelope = np.zeros(len(mz), dtype=bool)
+    for n in range(-1, 6):
+        target = theoretical_mz + n * isotope_spacing
+        is_envelope |= np.abs(mz - target) < envelope_tol_da
+
+    envelope_mask = in_window & is_envelope
+    coiso_mask = in_window & ~is_envelope
+
+    envelope_intensity = float(intensity[envelope_mask].sum()) if envelope_mask.any() else 0.0
+    coiso_intensity = float(intensity[coiso_mask].sum()) if coiso_mask.any() else 0.0
+
+    # None, not 0.0: with no envelope signal the ratio is undefined, and a
+    # caller must be able to tell "clean" from "could not be measured".
+    coiso_pct = (coiso_intensity / envelope_intensity * 100.0
+                 if envelope_intensity > 0 else None)
+
+    precursor_found = bool((np.abs(mz - precursor_mz) < envelope_tol_da).any())
+
+    return MS1Measurement(
+        best_ppm=best_ppm,
+        best_iso_n=best_iso_n,
+        coiso_pct=coiso_pct,
+        envelope_intensity=envelope_intensity,
+        coiso_intensity=coiso_intensity,
+        n_coiso_peaks=int(coiso_mask.sum()),
+        precursor_found=precursor_found,
+    )
+
+
 def plot_ms1_isolation_window(
     ms1_mz,
     ms1_intensity,
@@ -98,16 +212,13 @@ def plot_ms1_isolation_window(
         theoretical_mz = precursor_mz
     isotope_spacing = ISOTOPE_SPACING_DA / charge
 
-    # Determine best isotope match between selected and theoretical (MIPS check:
-    # detects when M+1..M+3 was isolated instead of the monoisotopic peak).
-    best_iso_n = 0
-    best_ppm = (precursor_mz - theoretical_mz) / theoretical_mz * 1e6
-    for iso_n in range(4):
-        corrected_mz = theoretical_mz + iso_n * isotope_spacing
-        ppm = (precursor_mz - corrected_mz) / corrected_mz * 1e6
-        if abs(ppm) < abs(best_ppm):
-            best_ppm = ppm
-            best_iso_n = iso_n
+    # All numbers come from measure_ms1_window so the drawn figure and the
+    # headless QC measurement can never disagree.
+    meas = measure_ms1_window(
+        mz, intensity, precursor_mz, charge, isolation_width, theoretical_mz
+    )
+    best_iso_n = meas.best_iso_n
+    best_ppm = meas.best_ppm
 
     half_iso = isolation_width / 2
     margin = 3.0
@@ -186,8 +297,14 @@ def plot_ms1_isolation_window(
             if is_coisolation.any():
                 n_coiso = int(is_coisolation.sum())
                 coiso_max_idx = np.argmax(int_zoom * is_coisolation)
-                coiso_pct = (int_zoom[is_coisolation].sum() / int_zoom[is_precursor].sum() * 100
-                             if is_precursor.any() else 0.0)
+                # Changed 2026-09-10: previously the denominator was the
+                # whole envelope including peaks OUTSIDE the isolation window,
+                # which understated co-isolation -- the dangerous direction for
+                # isobaric-label quantification. measure_ms1_window restricts
+                # both numerator and denominator to the isolation window, so
+                # this now reads "of the ions the quadrupole let through, what
+                # fraction is not the precursor".
+                coiso_pct = meas.coiso_pct if meas.coiso_pct is not None else 0.0
                 ax.annotate(f'Co-isolation\n{n_coiso} peaks ({coiso_pct:.0f}% RI)',
                             xy=(mz_zoom[coiso_max_idx], int_zoom[coiso_max_idx]),
                             xytext=(0.20, 0.85), textcoords='axes fraction',
