@@ -94,19 +94,30 @@ def choose_rt_window(psm_rt: Optional[float], traces: Sequence[RTFamilyTrace],
                      pad_min: float = 6.0) -> Optional[Tuple[float, float]]:
     """Retention window to draw, centred on the identification's own peak.
 
-    Centred on ``psm_rt`` and not on the strongest peak in the trace, because
-    over a long gradient the same m/z commonly elutes more than once and the
-    global apex is frequently not the peak that produced the identification --
-    the caveat recorded in ``OGlyco_DBA``'s ``acquisition/peak_width_profile``.
-    Falling back to the family's own span when no identification time is given
-    is safe; falling back to a global apex would not be.
+    Spans every apex in the family plus the identification's own retention
+    time. Two separate things are at work and it is easy to conflate them:
+
+    * *Which peak* a trace's apex refers to is decided upstream, by windowing
+      each chromatogram to its own identification's retention time before the
+      apex is read. Over a long gradient the same m/z commonly elutes more than
+      once and the global maximum is usually not the peak that produced the
+      identification -- the caveat recorded in ``OGlyco_DBA``'s
+      ``acquisition/peak_width_profile``.
+    * *What this function decides* is only the drawn x-range, and that has to
+      cover the family. Members routinely sit tens of minutes apart.
     """
-    if psm_rt is not None and np.isfinite(psm_rt):
-        return (psm_rt - pad_min, psm_rt + pad_min)
     apexes = [t.apex_rt for t in traces if t.apex_rt is not None]
-    if not apexes:
+    marks = list(apexes)
+    if psm_rt is not None and np.isfinite(psm_rt):
+        marks.append(float(psm_rt))
+    if not marks:
         return None
-    return (min(apexes) - pad_min, max(apexes) + pad_min)
+    # The window spans the whole family, not one member. A family routinely
+    # covers tens of minutes -- each sialic acid moves elution by roughly nine
+    # -- so centring on a single retention time draws one peak and leaves the
+    # rest of the family off-axis as flat noise, which is the opposite of the
+    # comparison this panel exists to make.
+    return (min(marks) - pad_min, max(marks) + pad_min)
 
 
 def find_inversions(traces: Sequence[RTFamilyTrace]) -> List[Tuple[str, str]]:
@@ -164,8 +175,11 @@ def plot_rt_family_panel(
     ax
         Draw into this axes to embed the panel; ``None`` creates its own figure.
     psm_rt
-        Retention time of the identification being reviewed. Marked, and used
-        to centre the window -- see :func:`choose_rt_window`.
+        Retention time of the identification being reviewed. Drawn as a marker
+        and included in the span of the window -- see :func:`choose_rt_window`.
+        Which peak each trace reports as its apex is decided upstream, by
+        windowing that chromatogram to its own identification's retention time
+        before it reaches this function.
     rt_window
         Explicit ``(min, max)``; otherwise chosen from ``psm_rt``.
 
