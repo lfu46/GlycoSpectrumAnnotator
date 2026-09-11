@@ -45,15 +45,32 @@ class TestInversions:
         ]
         assert find_inversions(bad) == [('N4H5A1', 'N4H5')]
 
-    def test_is_an_ordering_test_with_no_tolerance(self):
-        """One second of inversion is still an inversion. The criterion is
-        ordering, so inventing a tolerance would weaken it into the outlier
-        test it is meant to be independent of."""
+    def test_zero_tolerance_is_pure_ordering(self):
+        """With tolerance_min=0 one second early is an inversion. Kept as the
+        explicit zero case; the default the panel applies is not zero."""
         bad = [
             RTFamilyTrace('N4H5', RT, _peak(70.0), n_sialic=0),
             RTFamilyTrace('N4H5A1', RT, _peak(69.9), n_sialic=1),
         ]
-        assert len(find_inversions(bad)) == 1
+        assert len(find_inversions(bad, tolerance_min=0.0)) == 1
+
+    def test_inside_a_cluster_width_is_spread_not_inversion(self):
+        """Urminsky Table S3: on a backbone whose whole family spans 3 min an S1
+        member sat 0.5 min before the S0 median. Curated as consistent by a
+        human. Inside the tolerance, earlier is not inverted."""
+        bad = [
+            RTFamilyTrace('N4H5', RT, _peak(70.0), n_sialic=0),
+            RTFamilyTrace('N4H5A1', RT, _peak(69.5), n_sialic=1),
+        ]
+        assert find_inversions(bad, tolerance_min=2.0) == []
+        assert len(find_inversions(bad, tolerance_min=0.0)) == 1
+
+    def test_well_beyond_the_tolerance_is_still_caught(self):
+        bad = [
+            RTFamilyTrace('N4H5', RT, _peak(70.0), n_sialic=0),
+            RTFamilyTrace('N4H5A1', RT, _peak(60.0), n_sialic=1),
+        ]
+        assert find_inversions(bad, tolerance_min=2.0) == [('N4H5A1', 'N4H5')]
 
     def test_traces_without_a_peak_are_skipped_not_assumed_consistent(self):
         traces = _ordered_family() + [
@@ -134,6 +151,16 @@ class TestPanel:
                RTFamilyTrace('N4H5A1', RT, _peak(60.0), n_sialic=1, is_psm=True)]
         r = plot_rt_family_panel(bad, psm_rt=60.0)
         assert r.inversions == [('N4H5A1', 'N4H5')]
+
+    def test_panel_tolerance_matches_the_qc_rule(self):
+        """Panel and verdict must not disagree: the panel derives its inversion
+        tolerance from the same fraction-of-step-floored rule."""
+        near = [RTFamilyTrace('N4H5', RT, _peak(70.0), n_sialic=0),
+                RTFamilyTrace('N4H5A1', RT, _peak(69.6), n_sialic=1, is_psm=True)]
+        r = plot_rt_family_panel(near, psm_rt=69.6)
+        assert r.inversions == []          # 0.4 min early, inside the 2.0 min floor
+        r0 = plot_rt_family_panel(near, psm_rt=69.6, inversion_tolerance_min=0.0)
+        assert len(r0.inversions) == 1     # explicit zero tolerance still catches it
 
     def test_empty_family_does_not_raise(self):
         r = plot_rt_family_panel([], psm_rt=60.0)

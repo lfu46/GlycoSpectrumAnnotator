@@ -120,17 +120,26 @@ def choose_rt_window(psm_rt: Optional[float], traces: Sequence[RTFamilyTrace],
     return (min(marks) - pad_min, max(marks) + pad_min)
 
 
-def find_inversions(traces: Sequence[RTFamilyTrace]) -> List[Tuple[str, str]]:
-    """Glycoforms eluting earlier than a less-sialylated sibling.
+def find_inversions(traces: Sequence[RTFamilyTrace],
+                    tolerance_min: float = 0.0) -> List[Tuple[str, str]]:
+    """Glycoforms eluting earlier than a less-sialylated sibling by more than
+    ``tolerance_min``.
 
-    Pure ordering, so no tolerance is involved and none is invented. Traces
-    without a measurable apex are skipped rather than assumed consistent.
+    ``tolerance_min`` should be one cluster width -- the caller's outlier
+    window, typically ``DEFAULT_CLUSTER_FRACTION`` times the backbone's
+    measured sialic-acid step, floored at a minute or two. With it at zero this
+    is pure ordering, which the curated ground truth in Urminsky et al. Table
+    S3 shows is too strict: on a backbone whose whole S0-S3 family spans 3 min,
+    an S1 member sat 0.5 min before the S0 median and was called inverted. That
+    is spread, not evidence. Inside a cluster width, earlier is not inverted.
+
+    Traces without a measurable apex are skipped rather than assumed consistent.
     """
     apexed = [(t, t.apex_rt) for t in traces if t.apex_rt is not None]
     out: List[Tuple[str, str]] = []
     for t, rt in apexed:
         for other, other_rt in apexed:
-            if other.n_sialic < t.n_sialic and rt < other_rt:
+            if other.n_sialic < t.n_sialic and rt < other_rt - tolerance_min:
                 out.append((t.label, other.label))
                 break
     return out
@@ -164,6 +173,8 @@ def plot_rt_family_panel(
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (7, 3),
     show_legend: bool = True,
+    inversion_tolerance_min: Optional[float] = None,
+    window_floor_min: float = 2.0,
 ) -> RTFamilyResult:
     """Draw one peptide backbone's glycoform chromatograms on a single axis.
 
@@ -229,8 +240,13 @@ def plot_rt_family_panel(
                     textcoords='offset points', fontsize=7, color='#D55E00',
                     ha='left', va='top')
 
-    inversions = find_inversions(ordered)
     step = estimate_sialic_step(ordered)
+    if inversion_tolerance_min is None:
+        # Same rule as the QC layer: a fraction of this family's own step,
+        # floored at a cluster width, so panel and verdict cannot disagree.
+        inversion_tolerance_min = (max(DEFAULT_CLUSTER_FRACTION * abs(step), window_floor_min)
+                                   if step is not None else window_floor_min)
+    inversions = find_inversions(ordered, tolerance_min=inversion_tolerance_min)
     if inversions:
         ax.text(0.02, 0.95,
                 f"{len(inversions)} inversion(s): a sialylated form elutes early",
