@@ -75,14 +75,29 @@ class TestSialicStep:
 
 
 class TestWindow:
-    def test_centres_on_the_identification_not_the_biggest_peak(self):
-        """Over a long gradient the same m/z often elutes more than once, and
-        the global apex is frequently not the peak that produced the PSM."""
-        traces = [RTFamilyTrace('N4H5A1', RT, _peak(60.0, height=1.0)
-                                + _peak(95.0, height=50.0), n_sialic=1)]
-        lo, hi = choose_rt_window(60.0, traces, pad_min=5.0)
-        assert (lo, hi) == pytest.approx((55.0, 65.0))
-        assert not (lo <= 95.0 <= hi)
+    def test_spans_the_whole_family_not_one_member(self):
+        """A family routinely covers tens of minutes -- roughly nine per sialic
+        acid -- so a window centred on one member draws that member and leaves
+        the rest off-axis as flat noise, which is the opposite of the
+        comparison this panel exists to make."""
+        lo, hi = choose_rt_window(69.0, _ordered_family(), pad_min=5.0)
+        for apex in (60.0, 69.0, 78.0):
+            assert lo <= apex <= hi, f"{apex} fell outside the window"
+
+    def test_includes_the_psm_time_even_outside_the_apex_span(self):
+        traces = [RTFamilyTrace('N4H5A1', RT, _peak(60.0), n_sialic=1)]
+        lo, hi = choose_rt_window(85.0, traces, pad_min=5.0)
+        assert lo <= 60.0 <= hi and lo <= 85.0 <= hi
+
+    def test_which_peak_is_decided_upstream_not_here(self):
+        """The route layer windows each chromatogram to its own PSM retention
+        time before the apex is read, so a distant spurious peak never reaches
+        this function. Given a pre-windowed trace, the apex is the right one."""
+        windowed = (RT >= 55.0) & (RT <= 65.0)
+        tr = RTFamilyTrace('N4H5A1', RT[windowed],
+                           (_peak(60.0, height=1.0) + _peak(95.0, height=50.0))[windowed],
+                           n_sialic=1)
+        assert tr.apex_rt == pytest.approx(60.0, abs=0.1)
 
     def test_falls_back_to_the_family_span_without_a_psm_time(self):
         lo, hi = choose_rt_window(None, _ordered_family(), pad_min=5.0)
