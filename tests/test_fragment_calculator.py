@@ -148,3 +148,14 @@ class TestPeakMatching:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_y0_minus_water_is_below_y0():
+    """Y0-H2O = Y0 - H2O/z. The loss table subtracted glycan-minus-water, which put the
+    'Y0-H2O' target 18.0106/z ABOVE Y0 (OGlyco_DBA GPT tool review, finding 11)."""
+    from spectrum_annotator_ddzby.fragment_calculator import FragmentCalculator
+    mods = [{'position': 1, 'residue': 'S', 'mass': 203.0794, 'name': 'HexNAc'}]
+    for z in (1, 2):
+        ions = FragmentCalculator('SAAAAAK', mods, precursor_charge=3).calculate_Y_ions(charges=[z])
+        by = {i.annotation.split()[0]: i.mz for i in ions if i.annotation and i.annotation.startswith('Y0')}
+        assert abs((by['Y0'] - by['Y0-H2O']) - 18.0106 / z) < 1e-6, by

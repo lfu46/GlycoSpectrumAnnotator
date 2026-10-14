@@ -105,13 +105,13 @@ GLYCAN_Y_LOSSES = {
     'HexNAc_TMT': {
         # O-GlcNAc + TMT (528.2859 Da total)
         'Y0': 528.2859,           # Complete loss: peptide only
-        'Y0-H2O': 528.2859 - 18.0106,  # Y0 with water loss from peptide
+        'Y0-H2O': 528.2859 + 18.0106,  # Y0 minus water: the loss is glycan + H2O
         'Y*': 203.0794,           # Loss of HexNAc only, TMT stays on peptide (rare)
     },
     'HexNAc': {
         # O-GlcNAc without TMT (203.0794 Da)
         'Y0': 203.0794,           # Complete loss: peptide only
-        'Y0-H2O': 203.0794 - 18.0106,  # Y0 with water loss
+        'Y0-H2O': 203.0794 + 18.0106,  # Y0 minus water: the loss is glycan + H2O
     },
 }
 
